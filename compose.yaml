@@ -1,0 +1,78 @@
+name: openaidr
+x-server: &server
+  image: openaidr-local-server
+  build:
+    context: .
+    dockerfile: deploy/server.Dockerfile
+    args: &build-identity
+      OPENAIDR_BUILD_COMMIT: ${OPENAIDR_BUILD_COMMIT:?Run python3 scripts/local_stack.py configure first}
+      OPENAIDR_COMMIT_TIMESTAMP: ${OPENAIDR_COMMIT_TIMESTAMP:?Run python3 scripts/local_stack.py configure first}
+  environment: &server-env
+    OPENAIDR_DATABASE_URL: postgresql://openaidr:${POSTGRES_PASSWORD:?Configure local secrets}@db:5432/openaidr
+    OPENAIDR_PUBLIC_URL: ${OPENAIDR_PUBLIC_URL:-http://localhost:8080}
+    OPENAIDR_TENANT_ID_FILE: /run/openaidr-tenant/tenant_id
+    OPENAIDR_REQUIRE_TENANT: 'true'
+    OPENAIDR_SERVICES: ingest,api,detect
+    OPENAIDR_OSV_ASSESSMENT: ${OPENAIDR_OSV_ASSESSMENT:-true}
+    OPENAIDR_FREE_INSTALLATION_ID: ${OPENAIDR_FREE_INSTALLATION_ID:-}
+    OPENAIDR_FREE_DEVICE_ID: ${OPENAIDR_FREE_DEVICE_ID:-}
+    OPENAIDR_FREE_SECRET: ${OPENAIDR_FREE_SECRET:-}
+    OPENAIDR_FREE_ORIGIN: ${OPENAIDR_FREE_ORIGIN:-https://api.opensecura.ai}
+    OPENAIDR_INLINE_GUARDRAILS: 'true'
+    OPENAIDR_INTELLIGENCE_ORIGIN: ${OPENAIDR_INTELLIGENCE_ORIGIN:-}
+    OPENAIDR_INTELLIGENCE_API_KEY: ${OPENAIDR_INTELLIGENCE_API_KEY:-}
+    OPENAIDR_DATABASE_DIAGNOSTICS: ${OPENAIDR_DATABASE_DIAGNOSTICS:-false}
+  depends_on:
+    db:
+      condition: service_healthy
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: openaidr
+      POSTGRES_DB: openaidr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure local secrets}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U openaidr -d openaidr']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  bootstrap:
+    <<: *server
+    entrypoint: [openaidr-local-bootstrap]
+    environment:
+      <<: *server-env
+      OPENAIDR_TENANT_ID_FILE: ''
+      OPENAIDR_REQUIRE_TENANT: 'false'
+      OPENAIDR_ADMIN_PASSWORD: ${OPENAIDR_ADMIN_PASSWORD:?Configure local secrets}
+      OPENAIDR_TENANT_NAME: ${OPENAIDR_TENANT_NAME:-Local workspace}
+    volumes:
+      - tenant:/run/openaidr-tenant
+    command: [--email, '${OPENAIDR_ADMIN_EMAIL:-admin@localhost}']
+  server:
+    <<: *server
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    volumes:
+      - tenant:/run/openaidr-tenant:ro
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://localhost:8081/readyz")']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  dashboard:
+    build:
+      context: .
+      dockerfile: deploy/dashboard.Dockerfile
+      args: *build-identity
+    ports:
+      - '${OPENAIDR_BIND_ADDRESS:-127.0.0.1}:${OPENAIDR_PORT:-8080}:3000'
+    depends_on:
+      server:
+        condition: service_healthy
+volumes:
+  database:
+  tenant:

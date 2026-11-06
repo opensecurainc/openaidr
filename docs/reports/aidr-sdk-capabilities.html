@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Detailed capabilities report for the aidr 0.1.0 Python SDK, with validated synthetic sample results, implementation notes, and limitations.">
+<title>aidr 0.1.0 | SDK capabilities report</title><style>
+:root{--ink:#172b3d;--muted:#546777;--paper:#f4f6f8;--line:#dbe3e9;--accent:#087a70;--navy:#102b40;--pale:#e9f6f2;--amber:#956005;--red:#aa3e38}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;line-height:1.7}a{color:#096e84;text-underline-offset:3px}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #12a692;outline-offset:4px}
+.shell{max-width:1510px;margin:0 auto;display:grid;grid-template-columns:235px minmax(0,1fr);gap:42px;padding:36px 42px 60px}.sidebar{position:sticky;top:28px;align-self:start;max-height:calc(100vh - 55px);overflow:auto;padding:8px 8px 12px 0}.brand{display:flex;align-items:center;gap:11px;font-weight:750;letter-spacing:-.6px;font-size:23px}.brandmark{height:34px;width:34px;border:2px solid var(--accent);border-radius:9px;display:grid;place-items:center;color:var(--accent);font-size:18px;font-weight:800}.sidebar-label{font-size:11px;letter-spacing:1.7px;text-transform:uppercase;color:var(--muted);margin:33px 0 12px;font-weight:700}.sidebar nav a{display:flex;gap:10px;align-items:baseline;padding:8px 9px;margin:2px 0;text-decoration:none;color:var(--muted);font-size:13px;line-height:1.45;border-left:2px solid transparent;border-radius:0 5px 5px 0}.sidebar nav a span{font-size:10px;color:#798d9c;font-variant-numeric:tabular-nums}.sidebar nav a:hover,.sidebar nav a.active{color:var(--accent);background:#e7f1ee;border-left-color:var(--accent)}.side-meta{font-size:12px;border-top:1px solid var(--line);padding-top:18px;margin-top:23px;color:var(--muted)}main{min-width:0}.hero{background:var(--navy);color:#fff;border-radius:19px;padding:42px 46px 34px;position:relative;overflow:hidden}.hero:after{content:"";position:absolute;width:240px;height:240px;border:1px solid #335769;border-radius:50%;right:-135px;top:-95px;pointer-events:none}.eyebrow{font-size:11px;font-weight:750;letter-spacing:1.7px;text-transform:uppercase;color:var(--accent)}.hero .eyebrow{color:#8cdbcd}.hero h1{font-size:clamp(34px,4.1vw,54px);line-height:1.11;letter-spacing:-1.8px;font-weight:680;margin:21px 0 17px;max-width:680px}.hero .lead{font-size:18px;line-height:1.6;color:#ccdde5;max-width:650px;margin:0}.hero-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px;align-items:center}.hero-meta span{font-size:12px;padding:5px 11px;border:1px solid #426071;border-radius:30px;color:#dce9f0}.hero-meta .release{background:#c6f2e7;color:#134c45;border-color:transparent;font-weight:700}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:18px 2px 25px;color:var(--muted);font-size:12px}.toolbar button{background:white;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:7px 13px;font-size:12px;white-space:nowrap}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin:0 0 28px}.metric{background:#fff;padding:19px 20px;border:1px solid var(--line);border-radius:10px}.metric strong{display:block;font-size:27px;letter-spacing:-1px;line-height:1.2}.metric span{display:block;font-size:12px;color:var(--muted);margin-top:6px}.report-section{background:#fff;border:1px solid var(--line);border-radius:13px;padding:33px 35px;margin:23px 0}.section-heading{display:flex;gap:15px;align-items:flex-start;margin-bottom:22px}.section-number{font-size:11px;color:var(--accent);font-weight:750;background:var(--pale);padding:4px 7px;border-radius:5px;margin-top:6px}.section-heading h2{margin:0;font-size:25px;letter-spacing:-.65px;line-height:1.35}.section-intro{color:var(--muted);font-size:14px;margin:5px 0 0}p{margin:14px 0}h3{font-size:18px;letter-spacing:-.2px;margin:25px 0 10px;line-height:1.4}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:23px 0}.feature{border:1px solid var(--line);border-top:3px solid var(--accent);padding:23px;border-radius:8px;background:#fbfdfd}.feature h3{margin:9px 0}.feature p{font-size:14px;color:var(--muted)}.feature code{font-size:12px}.table-wrap{max-width:100%;overflow:auto;margin:19px 0;border:1px solid var(--line);border-radius:8px}table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.65}th{text-align:left;background:#f0f5f7;font-weight:650;color:#344e60;font-size:12px;padding:12px 15px;border-bottom:1px solid var(--line)}td{vertical-align:top;padding:13px 15px;border-bottom:1px solid #e8edf0;overflow-wrap:anywhere}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;width:25%}td code{font-size:11px}code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:.87em;background:#eef3f6;border:1px solid #e4ebef;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}.codebox{background:#12283a;border-radius:9px;overflow:hidden;margin:16px 0;border:1px solid #274153;min-width:0}.codehead{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:8px 14px;background:#1c3548;border-bottom:1px solid #344c5d;color:#aec5d3;font-size:11px;letter-spacing:.3px}.copy{font-size:11px;background:transparent;color:#cce9e5;border:1px solid #527184;padding:2px 10px;border-radius:4px}.copy:hover{background:#2e5060}pre{margin:0;padding:19px 21px;overflow:auto;line-height:1.72;tab-size:4;font-size:12px;color:#e0edf5}pre code{font-size:inherit;background:transparent;border:0;border-radius:0;padding:0;overflow-wrap:normal}.caption{font-size:12px;color:var(--muted)}.tag{display:inline-block;border-radius:5px;padding:3px 8px;font-size:11px;line-height:1.5;font-weight:650;white-space:nowrap}.tag.good{background:#e4f4ed;color:#176348}.tag.warning{background:#fff2d9;color:#885d0d}.tag.danger{background:#fce9e5;color:#99372f}.tag.muted{background:#edf0f3;color:#566675}.callout{border-left:3px solid var(--accent);background:#eef7f4;padding:16px 20px;margin:22px 0;border-radius:0 7px 7px 0}.callout strong{font-size:13px}.callout p{margin:5px 0 0;font-size:13px;color:#3c5a59}.callout.important{border-left-color:#bb871e;background:#fff8e9}.callout.important p{color:#6c5832}.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:23px 0}.flow>div{position:relative;background:#edf6f5;padding:17px 14px;border:1px solid #d6e8e3;border-radius:8px}.flow span{display:block;font-size:11px;color:var(--accent);margin-bottom:9px}.flow strong{font-size:13px;line-height:1.3;display:block}.flow p{font-size:11px;color:var(--muted);line-height:1.65;margin:7px 0 0}.flow>div:not(:last-child):after{content:"→";position:absolute;right:-13px;top:46%;z-index:2;font-size:17px;color:var(--accent);background:#fff;border-radius:50%;line-height:17px}.pill-list{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.pill-list code{padding:4px 8px}.sample-label{font-size:12px;color:#795712;background:#fff7df;border:1px solid #efdfb6;border-radius:6px;padding:9px 13px}.risk-scale{display:grid;grid-template-columns:repeat(5,1fr);border-radius:7px;overflow:hidden;border:1px solid var(--line);margin:16px 0}.risk-scale>div{padding:12px 9px;text-align:center;background:#eef3f7;border-top:4px solid #6d8c9e}.risk-scale>div:nth-child(2){background:#eaf4ee;border-color:#559a79}.risk-scale>div:nth-child(3){background:#fff6dc;border-color:#d6b145}.risk-scale>div:nth-child(4){background:#fff0dd;border-color:#d88b3d}.risk-scale>div:nth-child(5){background:#fbe9e6;border-color:#c46155}.risk-scale b{display:block;font-size:12px}.risk-scale span{font-size:10px;white-space:nowrap}.tabs{display:flex;flex-wrap:wrap;gap:5px;padding:5px;border:1px solid var(--line);border-radius:8px;background:#f1f5f7;margin:20px 0 0}.tabs button{border:0;background:transparent;color:var(--muted);font-size:12px;padding:8px 14px;border-radius:5px;flex:1}.tabs button[aria-selected=true]{background:#fff;box-shadow:0 1px 4px #17384d17;color:var(--accent);font-weight:700}.sample-panel{padding-top:1px}.sample-panel[hidden]{display:none}.sample-panel h3{font-size:16px;margin-top:20px}.sample-panel>p{font-size:13px}details{margin:18px 0;border:1px solid var(--line);border-radius:8px;padding:0 16px 4px}summary{padding:13px 0;font-size:13px;font-weight:650;cursor:pointer}details .codebox{margin-top:4px}.steps{padding-left:22px}.steps li{padding:5px 0;font-size:14px}.verification{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:19px 0}.verification>div{border:1px solid #d5e9df;background:#f1faf5;border-radius:8px;padding:18px}.verification strong{font-size:32px;display:block;color:#226b50;line-height:1.2}.verification span{font-size:12px;color:var(--muted);display:block;margin-top:8px}.source-list{display:grid;grid-template-columns:1fr 1fr;gap:10px}.source-list a{border:1px solid var(--line);border-radius:7px;padding:14px 16px;text-decoration:none}.source-list a:hover{border-color:var(--accent)}.source-list strong{font-size:13px;display:block}.source-list span{font-size:12px;display:block;color:var(--muted);margin-top:5px}footer{display:flex;justify-content:space-between;gap:15px;font-size:11px;color:var(--muted);padding:0 3px}.skip-link{position:fixed;top:-100px;left:20px;z-index:10;background:#fff;padding:10px;border:2px solid var(--accent)}.skip-link:focus{top:10px}
+@media(min-width:1500px){.shell{gap:55px}.report-section{padding:37px 42px}}
+@media(max-width:1080px){.shell{grid-template-columns:185px minmax(0,1fr);gap:22px;padding:25px 24px}.report-section{padding:25px}.hero{padding:32px}.sidebar nav a{font-size:12px}.flow{grid-template-columns:1fr 1fr}.flow>div:after{display:none}.metrics{gap:9px}.metric{padding:15px}.metric strong{font-size:24px}}
+@media(max-width:760px){.shell{display:block;padding:15px}.sidebar{position:static;max-height:none;padding:3px 3px 17px}.sidebar nav,.sidebar-label,.side-meta{display:none}.brand{font-size:21px}.brandmark{width:29px;height:29px;font-size:16px}.hero{padding:28px 24px;border-radius:12px}.hero h1{font-size:38px;letter-spacing:-1.3px}.hero .lead{font-size:16px}.hero-meta{margin-top:21px}.hero-meta span{font-size:11px}.toolbar{font-size:11px;align-items:flex-start}.metrics{grid-template-columns:1fr 1fr}.metric{padding:17px}.report-section{padding:23px 19px;margin:17px 0}.section-heading{gap:10px}.section-heading h2{font-size:23px}.section-intro{font-size:13px}.two-col,.source-list{grid-template-columns:1fr}.feature{padding:20px}.flow{grid-template-columns:1fr 1fr}.risk-scale{grid-template-columns:repeat(3,1fr)}.risk-scale>div{padding:10px 7px}.verification{gap:7px}.verification>div{padding:12px 10px}.verification strong{font-size:27px}.verification span{font-size:10px}.tag{white-space:normal}table{font-size:12px;min-width:470px}th,td{padding:11px}.table-wrap{margin-left:0;margin-right:0}pre{font-size:11px;padding:16px}.tabs button{padding:8px 9px}footer{display:block}.section-number{margin-top:5px}body{font-size:14px}}
+@media print{@page{size:A4;margin:15mm}html{scroll-behavior:auto}body{background:#fff;font-size:10pt;color:#172b3d}.shell{display:block;padding:0;max-width:none}.sidebar,.toolbar,.copy,.tabs,.skip-link{display:none!important}.hero{border-radius:0;padding:23px;color:#142f43;background:#edf3f6!important;border:1px solid #c9d6df}.hero h1{font-size:32pt}.hero .lead,.hero .eyebrow{color:#34576b}.hero-meta span{color:#234659;border-color:#b2c9d4}.hero:after{display:none}.metrics{margin-top:20px}.report-section{border:0;border-top:1px solid #bdcdd8;border-radius:0;padding:20px 0;margin:20px 0;break-inside:auto}.section-heading{break-after:avoid}.section-heading h2{font-size:20pt}h3{break-after:avoid}.codebox{background:#f0f4f6!important;border-color:#ccd7df;break-inside:auto}.codehead{background:#e3ebef!important;color:#234659}.codebox pre{color:#18364a;white-space:pre-wrap;font-size:8pt;overflow-wrap:anywhere}.codebox code{overflow-wrap:anywhere}table{min-width:0!important;font-size:9pt}.table-wrap{overflow:visible;break-inside:auto}tr{break-inside:avoid}thead{display:table-header-group}.sample-panel[hidden]{display:block!important}details{border:0;padding:0}details:not([open])>*:not(summary){display:block!important}.two-col,.flow,.verification,.risk-scale,.callout,.feature{break-inside:avoid}.report-section p{orphans:3;widows:3}.source-list a{color:#214e66}a{text-decoration:none}footer{border-top:1px solid #ccd7df;padding-top:10px}.sample-label{background:#fff9e9!important}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<a href="#main" class="skip-link">Skip to report</a>
+<div class="shell"><aside class="sidebar"><div class="brand"><span class="brandmark">a</span>OpenSecura</div><div class="sidebar-label">SDK capabilities report</div><nav aria-label="Report contents"><a href="#overview"><span>01</span>What the SDK can do</a><a href="#flow"><span>02</span>How a request flows</a><a href="#setup"><span>03</span>Install and connect</a><a href="#dependencies"><span>04</span>Scan dependencies</a><a href="#guardrails"><span>05</span>Run guardrail assessments</a><a href="#errors"><span>06</span>Handle uncertain results</a><a href="#billing"><span>07</span>Request identity and billing</a><a href="#data"><span>08</span>Data and connection behavior</a><a href="#reference"><span>09</span>API reference and limits</a><a href="#reuse"><span>10</span>Code reuse and packaging</a><a href="#verification"><span>11</span>Verification evidence</a><a href="#scope"><span>12</span>Scope and deferred work</a><a href="#sources"><span>13</span>Source notes</a></nav><div class="side-meta">Local implementation: <strong>0.1.0</strong><br>05 November 2026<br>Python 3.11+<br>Self-contained HTML</div></aside>
+<main id="main"><header class="hero"><div class="eyebrow">OpenSecura / Developer SDK</div><h1>Dependency scans.<br>Guardrail assessments.<br>One Python interface.</h1><p class="lead">A detailed report on what aidr can do today, how to integrate it, and how to interpret its results.</p><div class="hero-meta"><span class="release">aidr 0.1.0 · local build</span><span>05 November 2026</span><span>Sync + async</span><span>Detections deferred</span></div></header>
+<div class="toolbar"><span>Source-based report · Synthetic examples validated through the SDK</span><button id="print" type="button">Print / Save PDF</button></div>
+<div class="metrics"><div class="metric"><strong>2</strong><span>public service operations</span></div><div class="metric"><strong>25</strong><span>packages per scan, maximum</span></div><div class="metric"><strong>0 to 100</strong><span>guardrail score range</span></div><div class="metric"><strong>37</strong><span>implementation tests passed</span></div></div>
+<div class="callout important"><strong>Read the samples as demonstrations</strong><p>All packages, advisory IDs, risk scores, and billing values in the sample results are synthetic. The examples passed through the real SDK using simulated HTTP responses. No live model or vulnerability service was called.</p></div><section id="overview" class="report-section"><div class="section-heading"><span class="section-number">01</span><div><h2>What the SDK can do</h2><p class="section-intro">Two focused API operations for Python applications.</p></div></div>
+<p>The <code>aidr</code> package gives Python applications access to two OpenSecura API services: known-vulnerability checks for supplied dependency versions, and advisory risk assessments for AI agent activity. Applications can call either service from scripts, CI jobs, or an existing backend.</p>
+<p>The local 0.1.0 implementation adds a small public interface over the existing Intelligence client. It preserves the underlying transport, tenant binding, response validation, and service billing receipts. It does not start the desktop app or a local server.</p>
+<div class="two-col"><article class="feature"><span class="eyebrow">Dependencies</span><h3>Check the versions you use</h3><p>Submit exact npm or PyPI package identities. Read vulnerability findings, fixed versions, source references, and per-package availability.</p><code>client.scan_dependencies(...)</code></article><article class="feature"><span class="eyebrow">Guardrails</span><h3>Assess an agent action</h3><p>Submit an event with task context and optional company policy. Read its score, risk level, category, and confidence.</p><code>client.assess_guardrail(...)</code></article></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">Capability</th><th scope="col">Current support</th><th scope="col">Boundary</th></tr></thead><tbody><tr><td>Synchronous Python client</td><td><span class="tag good">Available</span></td><td><code>AIDR</code> with a context manager or explicit <code>close()</code>.</td></tr><tr><td>Asynchronous Python client</td><td><span class="tag good">Available</span></td><td><code>AsyncAIDR</code> with awaited calls and <code>aclose()</code>.</td></tr><tr><td>Dependency vulnerabilities</td><td><span class="tag good">Available</span></td><td>Known vulnerabilities for 1 to 25 exact npm/PyPI versions per call.</td></tr><tr><td>Guardrail assessments</td><td><span class="tag good">Available</span></td><td>Advisory scores and categories. The caller decides what action to take.</td></tr><tr><td>Detection and investigation workflows</td><td><span class="tag muted">Deferred</span></td><td>No public facade methods in this release.</td></tr><tr><td>Agent hooks, local scanning, automatic blocking</td><td><span class="tag muted">Outside this SDK</span></td><td>The facade does not install hooks, read repositories, execute commands, or enforce a policy.</td></tr></tbody></table></div></section><section id="flow" class="report-section"><div class="section-heading"><span class="section-number">02</span><div><h2>How a request flows</h2><p class="section-intro">Explicit input in. Validated evidence and a receipt out.</p></div></div>
+<div class="flow" aria-label="Application sends explicit input to aidr, aidr calls the HTTPS API, the API returns a validated result, and the application chooses a policy action">
+<div><span>01</span><strong>Your application</strong><p>Packages or event evidence<br>Request ID and credentials</p></div>
+<div><span>02</span><strong>aidr SDK</strong><p>Existing client transport<br>Input and response checks</p></div>
+<div><span>03</span><strong>OpenSecura API</strong><p>Dependency intelligence<br>Guardrail assessment</p></div>
+<div><span>04</span><strong>Your application</strong><p>Result and billing receipt<br>Caller-owned policy</p></div>
+</div>
+<p>Both public clients use the same async implementation. The synchronous client runs it on a persistent AnyIO event-loop thread. Package checks and guardrail assessments share a transport within each SDK client.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Operation</th><th scope="col">Request route</th><th scope="col">Default time limit</th></tr></thead><tbody><tr><td>Dependency scan</td><td><code>POST /v1/services/packages/check</code></td><td>25 seconds in the reused package client.</td></tr><tr><td>Guardrail assessment</td><td><code>POST /v1/services/guardrail/assess</code></td><td>10 seconds by default. A smaller per-call timeout is supported.</td></tr></tbody></table></div><div class="callout note"><strong>Input ownership</strong><p>The SDK sends the package identities and guardrail evidence that the caller supplies. It does not discover dependency files, collect agent sessions, or redact guardrail content automatically.</p></div></section><section id="setup" class="report-section"><div class="section-heading"><span class="section-number">03</span><div><h2>Install and connect</h2><p class="section-intro">Use the local build with a key and its assigned tenant.</p></div></div>
+<p>Use Python 3.11 or later and an OpenSecura API key with an assigned tenant UUID. The default origin is <code>https://api.opensecura.ai</code>. The SDK constructor validates configuration locally. It does not enroll a device, claim a new tenant, or verify that the key is accepted by the remote service.</p>
+<div class="codebox"><div class="codehead"><span>Install from the repository root</span><button class="copy" type="button">Copy</button></div><pre><code>python -m pip install ./packages/aidr</code></pre></div><p class="caption">This is the local 0.1.0 implementation. Publication to PyPI was not performed in this task. The earlier PyPI placeholder does not provide these SDK methods.</p><div class="codebox"><div class="codehead"><span>Python</span><button class="copy" type="button">Copy</button></div><pre><code>import os
+from uuid import uuid4
+from aidr import AIDR
+
+packages = [
+    {&quot;ecosystem&quot;: &quot;pypi&quot;, &quot;name&quot;: &quot;example-library&quot;, &quot;version&quot;: &quot;1.0&quot;},
+    {&quot;ecosystem&quot;: &quot;npm&quot;, &quot;name&quot;: &quot;@example/library&quot;, &quot;version&quot;: &quot;2.0.0&quot;},
+]
+
+# Save this ID and the exact input before submitting if recovery is needed.
+request_id = str(uuid4())
+
+with AIDR(
+    api_key=os.environ[&quot;OPENSECURA_API_KEY&quot;],
+    tenant_id=os.environ[&quot;OPENSECURA_TENANT_ID&quot;],
+) as client:
+    scan = client.scan_dependencies(packages, request_id=request_id)
+    for result in scan[&quot;results&quot;]:
+        print(result[&quot;query&quot;], result[&quot;status&quot;], result[&quot;findings&quot;])</code></pre></div><p>The environment variables above are read by the application code. The SDK does not load them automatically. An assigned key can identify its tenant through <code>GET /v1/capabilities</code>, but this discovery is not a public SDK method yet.</p><div class="codebox"><div class="codehead"><span>Async Python</span><button class="copy" type="button">Copy</button></div><pre><code>from aidr import AsyncAIDR
+
+async def scan_packages(api_key, tenant_id, packages, request_id):
+    async with AsyncAIDR(api_key=api_key, tenant_id=tenant_id) as client:
+        return await client.scan_dependencies(
+            packages,
+            request_id=request_id,
+        )</code></pre></div><p>Reuse a client for repeated requests, then close it. Closing twice is safe. A call after close raises <code>RuntimeError</code>. The async implementation uses asyncio; it is not a promise of compatibility with every async backend.</p></section><section id="dependencies" class="report-section"><div class="section-heading"><span class="section-number">04</span><div><h2>Scan dependencies</h2><p class="section-intro">Exact versions, known vulnerabilities, and per-package availability.</p></div></div>
+<p>Provide a list of objects with <code>ecosystem</code>, <code>name</code>, and <code>version</code>. The request is validated before network I/O. npm scoped package names are supported. PyPI package names are normalized, for example <code>Example_Library</code> becomes <code>example-library</code>.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Input or result</th><th scope="col">Behavior</th></tr></thead><tbody><tr><td>Accepted ecosystems</td><td><code>npm</code> and <code>pypi</code>, case-insensitive on input.</td></tr><tr><td>Version identity</td><td>Exact supported SemVer for npm and canonical supported PEP 440 forms for PyPI.</td></tr><tr><td>Rejected input</td><td>Empty batches, more than 25 packages, version ranges such as <code>^1.0.0</code>, tags such as <code>latest</code>, filesystem paths, and unsupported ecosystems.</td></tr><tr><td>Findings</td><td>Primary vulnerability ID, aliases, source IDs, summary, qualitative severity, fixed versions, severity vectors, and a source URL.</td></tr><tr><td>Result order</td><td>One result per input package in the same order. Mismatched identities and missing results are rejected.</td></tr><tr><td>Freshness</td><td>The reused validator checks that successful results are current and that expiry is exactly 24 hours after the assessment timestamp.</td></tr><tr><td>Return type</td><td>A Python dictionary containing <code>results</code> and <code>billing</code>. Successful package timestamps are timezone-aware Python datetime objects.</td></tr></tbody></table></div><h3>Sample scan: three different outcomes</h3><p class="sample-label">Synthetic packages and advisory identifiers. No live vulnerability lookup was performed.</p><div class="codebox"><div class="codehead"><span>Package input</span><button class="copy" type="button">Copy</button></div><pre><code>[
+  {
+    &quot;ecosystem&quot;: &quot;PyPI&quot;,
+    &quot;name&quot;: &quot;Example_Library&quot;,
+    &quot;version&quot;: &quot;1.0&quot;
+  },
+  {
+    &quot;ecosystem&quot;: &quot;npm&quot;,
+    &quot;name&quot;: &quot;@example/library&quot;,
+    &quot;version&quot;: &quot;2.0.0&quot;
+  },
+  {
+    &quot;ecosystem&quot;: &quot;npm&quot;,
+    &quot;name&quot;: &quot;demo-helper&quot;,
+    &quot;version&quot;: &quot;1.0.0&quot;
+  }
+]</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">Package</th><th scope="col">Sample status</th><th scope="col">Meaning</th></tr></thead><tbody><tr><td><code>example-library 1.0</code></td><td><span class="tag danger">Complete · finding</span></td><td>A successful check returned one synthetic high-severity advisory, with a listed fix at 1.1.</td></tr><tr><td><code>@example/library 2.0.0</code></td><td><span class="tag warning">Unavailable</span></td><td>The check did not produce an assessment. Empty findings here do not establish safety.</td></tr><tr><td><code>demo-helper 1.0.0</code></td><td><span class="tag good">Complete · no findings</span></td><td>This successful check returned no known vulnerabilities. It is not a guarantee that the package is safe.</td></tr></tbody></table></div><details open><summary>View the full validated sample result</summary><div class="codebox"><div class="codehead"><span>Synthetic SDK output · JSON display</span><button class="copy" type="button">Copy</button></div><pre><code>{
+  &quot;results&quot;: [
+    {
+      &quot;query&quot;: {
+        &quot;package&quot;: {
+          &quot;ecosystem&quot;: &quot;PyPI&quot;,
+          &quot;name&quot;: &quot;example-library&quot;
+        },
+        &quot;version&quot;: &quot;1.0&quot;
+      },
+      &quot;status&quot;: &quot;complete&quot;,
+      &quot;findings&quot;: [
+        {
+          &quot;id&quot;: &quot;TEST-2026-0001&quot;,
+          &quot;aliases&quot;: [
+            &quot;TEST-ALIAS-0001&quot;
+          ],
+          &quot;source_ids&quot;: [
+            &quot;TEST-OSV-0001&quot;
+          ],
+          &quot;summary&quot;: &quot;Synthetic advisory used to demonstrate the SDK response.&quot;,
+          &quot;severity&quot;: &quot;high&quot;,
+          &quot;fixed_versions&quot;: [
+            &quot;1.1&quot;
+          ],
+          &quot;severity_vectors&quot;: [],
+          &quot;url&quot;: &quot;https://osv.dev/vulnerability/TEST-OSV-0001&quot;
+        }
+      ],
+      &quot;checked_at&quot;: &quot;2026-11-05T21:47:39.577242+00:00&quot;,
+      &quot;expires_at&quot;: &quot;2026-11-06T21:47:39.577242+00:00&quot;,
+      &quot;reason&quot;: &quot;&quot;
+    },
+    {
+      &quot;query&quot;: {
+        &quot;package&quot;: {
+          &quot;ecosystem&quot;: &quot;npm&quot;,
+          &quot;name&quot;: &quot;@example/library&quot;
+        },
+        &quot;version&quot;: &quot;2.0.0&quot;
+      },
+      &quot;status&quot;: &quot;unavailable&quot;,
+      &quot;findings&quot;: [],
+      &quot;checked_at&quot;: null,
+      &quot;expires_at&quot;: null,
+      &quot;reason&quot;: &quot;Intelligence assessment unavailable&quot;
+    },
+    {
+      &quot;query&quot;: {
+        &quot;package&quot;: {
+          &quot;ecosystem&quot;: &quot;npm&quot;,
+          &quot;name&quot;: &quot;demo-helper&quot;
+        },
+        &quot;version&quot;: &quot;1.0.0&quot;
+      },
+      &quot;status&quot;: &quot;complete&quot;,
+      &quot;findings&quot;: [],
+      &quot;checked_at&quot;: &quot;2026-11-05T21:47:39.577242+00:00&quot;,
+      &quot;expires_at&quot;: &quot;2026-11-06T21:47:39.577242+00:00&quot;,
+      &quot;reason&quot;: &quot;&quot;
+    }
+  ],
+  &quot;billing&quot;: {
+    &quot;request_id&quot;: &quot;11111111-2222-4333-8444-555555555555&quot;,
+    &quot;service&quot;: &quot;package_vulnerabilities&quot;,
+    &quot;state&quot;: &quot;settled&quot;,
+    &quot;credits_reserved&quot;: &quot;1&quot;,
+    &quot;credits_charged&quot;: &quot;1&quot;,
+    &quot;rate_version&quot;: &quot;test.1&quot;
+  }
+}</code></pre></div></details><p class="caption">For this HTML display, Python datetime objects were converted with <code>isoformat()</code>. The TEST identifiers and the OSV-format URL are illustrative and are not real advisories. The SDK preserves provider severity vectors; it does not calculate a new exploitability verdict or choose an upgrade for you.</p><div class="callout note"><strong>Scanning a larger project</strong><p>Resolve the project’s installed or locked versions outside the SDK. Split them into batches of at most 25 and give each batch its own persisted request ID. Automatic file discovery, dependency resolution, transitive expansion, and batching are not implemented.</p></div></section><section id="guardrails" class="report-section"><div class="section-heading"><span class="section-number">05</span><div><h2>Run guardrail assessments</h2><p class="section-intro">Structured context and advisory scores, with policy controlled by the caller.</p></div></div>
+<p>Call <code>assess_guardrail</code> with structured event evidence. The intended state contains a <code>target_event</code>, an optional <code>latest_prompt</code>, a list of <code>prior_events</code>, and a <code>context_limited</code> flag. The wrapper forwards that state to the existing API client; it does not build or truncate the context for you.</p>
+<div class="pill-list"><code>prompt</code><code>response</code><code>tool.call</code><code>tool.result</code><code>command</code><code>file.read</code><code>file.write</code><code>network</code></div>
+<div class="codebox"><div class="codehead"><span>Python</span><button class="copy" type="button">Copy</button></div><pre><code>state = {
+    &quot;target_event&quot;: {
+        &quot;kind&quot;: &quot;command&quot;,
+        &quot;command&quot;: {&quot;text&quot;: &quot;git status&quot;},
+    },
+    &quot;latest_prompt&quot;: {
+        &quot;kind&quot;: &quot;prompt&quot;,
+        &quot;text&quot;: &quot;Check the repository status.&quot;,
+    },
+    &quot;prior_events&quot;: [],
+    &quot;context_limited&quot;: True,
+}
+
+assessment = client.assess_guardrail(
+    state,
+    request_id=guardrail_request_id,  # Persist this canonical UUID first.
+    company_policy=&quot;Do not expose secrets or delete user data.&quot;,
+    timeout=5,
+    max_credits=&quot;1&quot;,  # Example budget, not a published service price.
+)</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">Field</th><th scope="col">What it means</th></tr></thead><tbody><tr><td><code>status</code></td><td><code>scored</code> or <code>unscored</code> for a returned assessment. Service errors raise an exception.</td></tr><tr><td><code>score</code> / <code>level</code></td><td>A score from 0 to 100 and its matching risk band. Both are null for an unscored result.</td></tr><tr><td><code>category</code></td><td>A named risk category, <code>none</code>, or <code>unknown</code> for an unscored result.</td></tr><tr><td><code>confidence</code></td><td>Service-provided assessment confidence between 0 and 1. It is not validated here as a calibrated probability.</td></tr><tr><td><code>category_confidence</code></td><td>Service-provided category confidence between 0 and 1.</td></tr><tr><td><code>assessed_at</code></td><td>A timezone-qualified timestamp string. Unlike package timestamps, it remains a string in the current facade.</td></tr><tr><td><code>billing</code></td><td>A matching, validated service receipt. Successful guardrail results require settled or disabled billing.</td></tr></tbody></table></div><h3>Score bands checked by the existing client</h3><div class="risk-scale"><div><b>Info</b><span>0 ≤ score &lt; 20</span></div><div><b>Low</b><span>20 ≤ score &lt; 40</span></div><div><b>Medium</b><span>40 ≤ score &lt; 60</span></div><div><b>High</b><span>60 ≤ score &lt; 80</span></div><div><b>Critical</b><span>80 ≤ score ≤ 100</span></div></div><p>Available risk categories are <code>secret_exfiltration</code>, <code>data_exfiltration</code>, <code>supply_chain</code>, <code>destructive_command</code>, <code>excessive_agency</code>, and <code>hallucination</code>. These are schema labels, not a measured accuracy claim.</p><p class="sample-label">All scenarios below are simulated. Scores were supplied by the test harness and validated by the SDK, not predicted by a live model.</p><div class="tabset"><div class="tabs" role="tablist" aria-label="guardrail examples"><button type="button" role="tab" id="guardrail-tab-info" aria-controls="guardrail-info" data-target="guardrail-info">Info score</button><button type="button" role="tab" id="guardrail-tab-high" aria-controls="guardrail-high" data-target="guardrail-high">High score</button><button type="button" role="tab" id="guardrail-tab-unscored" aria-controls="guardrail-unscored" data-target="guardrail-unscored">Unscored</button></div><div class="sample-panel" role="tabpanel" id="guardrail-info" aria-labelledby="guardrail-tab-info"><h3>Info score</h3><p>The fixture for a <code>git status</code> event returns a zero score and category <code>none</code>. No allow decision is returned.</p><div class="codebox"><div class="codehead"><span>Synthetic SDK output · JSON display</span><button class="copy" type="button">Copy</button></div><pre><code>{
+  &quot;profile&quot;: &quot;guardrail.1&quot;,
+  &quot;confidence&quot;: 0.9,
+  &quot;category_confidence&quot;: 0.8,
+  &quot;assessed_at&quot;: &quot;2026-11-05T21:47:40.588107+00:00&quot;,
+  &quot;billing&quot;: {
+    &quot;request_id&quot;: &quot;22222222-3333-4444-8555-666666666666&quot;,
+    &quot;service&quot;: &quot;guardrail&quot;,
+    &quot;state&quot;: &quot;settled&quot;,
+    &quot;credits_reserved&quot;: &quot;1&quot;,
+    &quot;credits_charged&quot;: &quot;1&quot;,
+    &quot;rate_version&quot;: &quot;test.1&quot;
+  },
+  &quot;status&quot;: &quot;scored&quot;,
+  &quot;category&quot;: &quot;none&quot;,
+  &quot;score&quot;: 0.0,
+  &quot;level&quot;: &quot;info&quot;
+}</code></pre></div></div><div class="sample-panel" role="tabpanel" id="guardrail-high" aria-labelledby="guardrail-tab-high"><h3>High score</h3><p>A synthetic destructive-command scenario illustrates score 72 and level high. The command below is evidence text only; it was not executed.</p><div class="codebox"><div class="codehead"><span>Synthetic state input</span><button class="copy" type="button">Copy</button></div><pre><code>{
+  &quot;target_event&quot;: {
+    &quot;kind&quot;: &quot;command&quot;,
+    &quot;command&quot;: {
+      &quot;text&quot;: &quot;rm -rf ./customer-data&quot;
+    }
+  },
+  &quot;latest_prompt&quot;: {
+    &quot;kind&quot;: &quot;prompt&quot;,
+    &quot;text&quot;: &quot;List the files in this project.&quot;
+  },
+  &quot;prior_events&quot;: [],
+  &quot;context_limited&quot;: true
+}</code></pre></div><div class="codebox"><div class="codehead"><span>Synthetic SDK output · JSON display</span><button class="copy" type="button">Copy</button></div><pre><code>{
+  &quot;profile&quot;: &quot;guardrail.1&quot;,
+  &quot;confidence&quot;: 0.91,
+  &quot;category_confidence&quot;: 0.88,
+  &quot;assessed_at&quot;: &quot;2026-11-05T21:47:40.588107+00:00&quot;,
+  &quot;billing&quot;: {
+    &quot;request_id&quot;: &quot;22222222-3333-4444-8555-666666666666&quot;,
+    &quot;service&quot;: &quot;guardrail&quot;,
+    &quot;state&quot;: &quot;settled&quot;,
+    &quot;credits_reserved&quot;: &quot;1&quot;,
+    &quot;credits_charged&quot;: &quot;1&quot;,
+    &quot;rate_version&quot;: &quot;test.1&quot;
+  },
+  &quot;status&quot;: &quot;scored&quot;,
+  &quot;category&quot;: &quot;destructive_command&quot;,
+  &quot;score&quot;: 72.0,
+  &quot;level&quot;: &quot;high&quot;
+}</code></pre></div></div><div class="sample-panel" role="tabpanel" id="guardrail-unscored" aria-labelledby="guardrail-tab-unscored"><h3>Unscored</h3><p>An unscored result retains its billing receipt but has no score or risk level. The application must handle this as an unknown assessment.</p><div class="codebox"><div class="codehead"><span>Synthetic SDK output · JSON display</span><button class="copy" type="button">Copy</button></div><pre><code>{
+  &quot;profile&quot;: &quot;guardrail.1&quot;,
+  &quot;confidence&quot;: 0.0,
+  &quot;category_confidence&quot;: 0.0,
+  &quot;assessed_at&quot;: &quot;2026-11-05T21:47:40.588107+00:00&quot;,
+  &quot;billing&quot;: {
+    &quot;request_id&quot;: &quot;22222222-3333-4444-8555-666666666666&quot;,
+    &quot;service&quot;: &quot;guardrail&quot;,
+    &quot;state&quot;: &quot;settled&quot;,
+    &quot;credits_reserved&quot;: &quot;1&quot;,
+    &quot;credits_charged&quot;: &quot;1&quot;,
+    &quot;rate_version&quot;: &quot;test.1&quot;
+  },
+  &quot;status&quot;: &quot;unscored&quot;,
+  &quot;category&quot;: &quot;unknown&quot;,
+  &quot;score&quot;: null,
+  &quot;level&quot;: null
+}</code></pre></div></div></div><div class="callout important"><strong>Assessment is separate from enforcement</strong><p>The result has no allow, deny, or approval field. If your product uses score 60 as a manual-review threshold, that is your application’s policy. The SDK does not enforce that threshold or run the proposed action.</p></div></section><section id="errors" class="report-section"><div class="section-heading"><span class="section-number">06</span><div><h2>Handle uncertain results</h2><p class="section-intro">Separate successful assessments, unavailable evidence, and exceptions.</p></div></div>
+<p>Successful HTTP delivery does not guarantee a usable assessment. The existing clients validate response shape, package identity, freshness, score consistency, and billing identity. Invalid or unavailable results must remain visible to the calling application.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Situation</th><th scope="col">Public behavior</th></tr></thead><tbody><tr><td>Invalid package input or request ID</td><td><code>ValueError</code>, including Pydantic validation errors, before a service call for the covered cases.</td></tr><tr><td>Package request failure</td><td><code>ScanError</code> with optional <code>status_code</code>, <code>retry_after</code>, <code>error_code</code>, and validated <code>billing</code>.</td></tr><tr><td>One package is unavailable</td><td>A returned result with <code>status='unavailable'</code>; the whole request need not raise.</td></tr><tr><td>Guardrail request or validation failure</td><td><code>GuardrailError</code> with <code>code</code>, <code>retryable</code>, <code>retry_after</code>, and any validated receipt.</td></tr><tr><td>Malformed guardrail score</td><td>An inconsistent score/category/level is rejected as <code>invalid_response</code>.</td></tr><tr><td>Client already closed</td><td><code>RuntimeError</code>. Construct a new client if another operation is needed.</td></tr></tbody></table></div><div class="tabset"><div class="tabs" role="tablist" aria-label="errors examples"><button type="button" role="tab" id="errors-tab-rate" aria-controls="errors-rate" data-target="errors-rate">Scan rate limit</button><button type="button" role="tab" id="errors-tab-provider" aria-controls="errors-provider" data-target="errors-provider">Guardrail unavailable</button></div><div class="sample-panel" role="tabpanel" id="errors-rate" aria-labelledby="errors-tab-rate"><h3>Scan rate limit</h3><p>A simulated HTTP 429 produces a typed exception. The 30-second header is retained as a string. No automatic retry occurs.</p><div class="codebox"><div class="codehead"><span>Synthetic SDK output · JSON display</span><button class="copy" type="button">Copy</button></div><pre><code>{
+  &quot;exception&quot;: &quot;ScanError&quot;,
+  &quot;message&quot;: &quot;Dependency scan unavailable&quot;,
+  &quot;status_code&quot;: 429,
+  &quot;retry_after&quot;: &quot;30&quot;,
+  &quot;error_code&quot;: null,
+  &quot;billing&quot;: null
+}</code></pre></div></div><div class="sample-panel" role="tabpanel" id="errors-provider" aria-labelledby="errors-tab-provider"><h3>Guardrail unavailable</h3><p>A simulated provider failure produces a GuardrailError. This example contains a released receipt with zero credits charged. Other failures can have different accounting states or no valid receipt.</p><div class="codebox"><div class="codehead"><span>Synthetic SDK output · JSON display</span><button class="copy" type="button">Copy</button></div><pre><code>{
+  &quot;exception&quot;: &quot;GuardrailError&quot;,
+  &quot;message&quot;: &quot;provider_unavailable&quot;,
+  &quot;retry_after&quot;: 30.0,
+  &quot;code&quot;: &quot;provider_unavailable&quot;,
+  &quot;retryable&quot;: true,
+  &quot;billing&quot;: {
+    &quot;request_id&quot;: &quot;22222222-3333-4444-8555-666666666666&quot;,
+    &quot;service&quot;: &quot;guardrail&quot;,
+    &quot;state&quot;: &quot;released&quot;,
+    &quot;credits_reserved&quot;: &quot;1&quot;,
+    &quot;credits_charged&quot;: &quot;0&quot;,
+    &quot;rate_version&quot;: &quot;test.1&quot;
+  }
+}</code></pre></div></div></div><div class="codebox"><div class="codehead"><span>Example caller policy</span><button class="copy" type="button">Copy</button></div><pre><code>from aidr import GuardrailError
+
+def review_action(client, state, request_id):
+    try:
+        result = client.assess_guardrail(state, request_id=request_id)
+    except GuardrailError as error:
+        return {
+            &quot;review&quot;: &quot;required&quot;,
+            &quot;reason&quot;: error.code,
+            &quot;billing&quot;: error.billing,
+        }
+
+    # Example application policy. This threshold is not an SDK default.
+    if result[&quot;status&quot;] != &quot;scored&quot; or result[&quot;score&quot;] &gt;= 60:
+        return {&quot;review&quot;: &quot;required&quot;, &quot;assessment&quot;: result}
+    return {&quot;review&quot;: &quot;not_required&quot;, &quot;assessment&quot;: result}</code></pre></div><p class="caption">This example reports a review requirement; it does not execute or authorize an action. The reused guardrail client maps HTTP-level service unavailability to <code>provider_unavailable</code>. It does not expose the original HTTP status in GuardrailError, even though ScanError can retain it.</p></section><section id="billing" class="report-section"><div class="section-heading"><span class="section-number">07</span><div><h2>Request identity and billing</h2><p class="section-intro">Keep each operation traceable and retain validated accounting.</p></div></div>
+<p>Each logical operation requires a caller-supplied canonical UUID string. The client sends it as <code>Idempotency-Key</code>. Generate and save the ID and exact request inputs before submitting when recovery matters. A fresh scan batch or new guardrail assessment needs a new ID.</p>
+<ol class="steps"><li><strong>Before the request:</strong> persist the operation ID, input, and relevant options.</li><li><strong>After a response:</strong> retain the result and matching billing receipt as your application requires.</li><li><strong>After an uncertain outcome:</strong> reuse the saved ID and identical input if you retry. Do not silently create another logical operation.</li></ol>
+<div class="table-wrap"><table><thead><tr><th scope="col">Receipt field</th><th scope="col">Interpretation</th></tr></thead><tbody><tr><td><code>request_id</code></td><td>Must match the operation’s submitted UUID.</td></tr><tr><td><code>service</code></td><td><code>package_vulnerabilities</code> or <code>guardrail</code> for these public methods.</td></tr><tr><td><code>state</code></td><td>A validated accounting state such as disabled, reserved, settled, pending, or released.</td></tr><tr><td><code>credits_reserved</code></td><td>The operation’s reservation, as an exact decimal string when applicable.</td></tr><tr><td><code>credits_charged</code></td><td>The confirmed charge when known. Null is not the same as zero.</td></tr><tr><td><code>rate_version</code></td><td>The service’s rate identifier, when applicable.</td></tr></tbody></table></div><div class="callout note"><strong>Sample credits are not pricing</strong><p>The example receipts use a synthetic rate version, test.1, and illustrative credit values. They do not state real pricing, free allowances, or a current account balance. The connected API controls billing.</p></div><p><code>max_credits</code> is available on guardrail calls as an exact decimal string. The current scan facade does not expose a matching per-call budget option. A timeout is not proof that a billed operation did not run. Both public methods avoid automatic transport retries.</p></section><section id="data" class="report-section"><div class="section-heading"><span class="section-number">08</span><div><h2>Data and connection behavior</h2><p class="section-intro">What the client sends and how it connects.</p></div></div><div class="table-wrap"><table><thead><tr><th scope="col">Control</th><th scope="col">Current behavior</th></tr></thead><tbody><tr><td>Authentication</td><td>Bearer API key plus the tenant ID header. The connection checks the credential format and canonicalizes the tenant UUID.</td></tr><tr><td>Destination</td><td>An exact HTTPS origin is required. The default is <code>https://api.opensecura.ai</code>. Redirects are not followed.</td></tr><tr><td>Trust configuration</td><td>Default certificate validation or an explicit PEM bundle through <code>ca_file</code>. Environment proxy settings are disabled by the reused HTTP client.</td></tr><tr><td>Sent dependency data</td><td>Package ecosystem, normalized name, exact version, and request identity. The facade reads no project files.</td></tr><tr><td>Sent guardrail data</td><td>Caller-supplied state and optional company policy. The facade does not automatically redact these fields.</td></tr><tr><td>Error detail</td><td>The public error path avoids arbitrary service response bodies. Recognized machine error codes can be retained for scan failures.</td></tr><tr><td>Telemetry</td><td>Content-free SDK latency reports are sent only when the API advertises support. Disable with <code>OPENAIDR_SDK_LATENCY=false</code> before client construction.</td></tr><tr><td>Local services</td><td>No desktop runtime, sensor, database, or local HTTP server is required.</td></tr></tbody></table></div><p>Payload retention and model quality are properties of the deployed service. This report verifies client behavior and does not make a new service-retention, detection-accuracy, or latency claim.</p></section><section id="reference" class="report-section"><div class="section-heading"><span class="section-number">09</span><div><h2>API reference and limits</h2><p class="section-intro">The exact public surface of the 0.1.0 facade.</p></div></div><div class="codebox"><div class="codehead"><span>Public method signatures</span><button class="copy" type="button">Copy</button></div><pre><code>AIDR(
+    *,
+    api_key: str,
+    tenant_id: str,
+    base_url: str = &quot;https://api.opensecura.ai&quot;,
+    ca_file: str = &quot;&quot;,
+    transport = None,
+)
+
+client.scan_dependencies(
+    packages: list[dict[str, str]],
+    *,
+    request_id: str,
+) -&gt; dict
+
+client.assess_guardrail(
+    state: dict,
+    *,
+    request_id: str,
+    company_policy: str = &quot;&quot;,
+    timeout: float | None = None,
+    max_credits: str | None = None,
+) -&gt; dict</code></pre></div><p><code>AsyncAIDR</code> accepts the same constructor arguments. Its two service methods must be awaited. <code>transport</code> is an optional HTTPX async transport, useful for controlled integration tests.</p><div class="table-wrap"><table><thead><tr><th scope="col">Limit or detail</th><th scope="col">Current value</th></tr></thead><tbody><tr><td>Python</td><td>3.11 or later.</td></tr><tr><td>Packages per scan</td><td>1 to 25.</td></tr><tr><td>Package response body</td><td>At most 4 MiB in the reused transport.</td></tr><tr><td>Package call timeout</td><td>25 seconds; no public per-call override.</td></tr><tr><td>Guardrail timeout</td><td>Default and maximum 10 seconds. Values below 0.001 seconds are rejected by the reused client.</td></tr><tr><td>Guardrail response body</td><td>At most 64,000 bytes.</td></tr><tr><td>Guardrail evidence contract</td><td>24,000 UTF-8 bytes for state and 8,000 bytes per event. The facade does not trim the input or provide a comprehensive local state validator.</td></tr><tr><td>Input batching or retry</td><td>Caller-managed.</td></tr><tr><td>CLI</td><td><code>aidr</code> shows SDK help; <code>aidr --version</code> reports the version. There are no scan or guardrail command subcommands.</td></tr><tr><td>Runtime dependencies</td><td>HTTPX, AnyIO, Pydantic, PyYAML, and tzdata on Windows.</td></tr></tbody></table></div></section><section id="reuse" class="report-section"><div class="section-heading"><span class="section-number">10</span><div><h2>Code reuse and packaging</h2><p class="section-intro">Existing clients supply the implementation behind the public interface.</p></div></div>
+<p>The public implementation lives in <code>packages/aidr</code>. At build time, it verifies the existing Intelligence client wheel against the repository manifest, then bundles that client and the shared helpers under <code>aidr._vendor</code>. Only absolute import paths are rewritten in the bundled sources.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Existing code</th><th scope="col">How the public SDK uses it</th></tr></thead><tbody><tr><td><code>IntelligenceClient</code> and <code>Connection</code></td><td>HTTPS transport, tenant binding, bounded responses, request identity, and content-free timing.</td></tr><tr><td><code>ThreatIntelClient.packages</code></td><td>Package assessment calls, source evidence, per-package validation, freshness checks, and receipt callbacks.</td></tr><tr><td><code>AsyncGuardrailClient.assess</code></td><td>Guardrail request construction, timeouts, score validation, and billing validation.</td></tr><tr><td>Shared wire contracts</td><td>Pydantic models for package input, responses, and credit receipts.</td></tr><tr><td><code>openaidr_common</code></td><td>Existing helper code and required redaction assets bundled for the client’s internal imports.</td></tr><tr><td>Small public adapters</td><td>Simple input objects, sync access, context managers, scan error receipts, and preserved scan HTTP status.</td></tr></tbody></table></div><p>The private namespace avoids import collisions with separately installed OpenAIDR clients. The wheel and source archive carry generated code, license files, and provenance. Users do not need a private package index or a separately installed Intelligence SDK.</p><div class="codebox"><div class="codehead"><span>Reused SDK artifact</span><button class="copy" type="button">Copy</button></div><pre><code>openaidr_api_client-2026.11.4+376d40c-py3-none-any.whl
+SHA-256: f010a36634179aef5fc2c6c6b8fa1710d81e1b3e62b59ef356c6b3cae07e018f</code></pre></div><p class="caption">The bundled SDK contains more lower-level services than this facade exposes. Their presence under <code>_vendor</code> is not a public compatibility promise.</p></section><section id="verification" class="report-section"><div class="section-heading"><span class="section-number">11</span><div><h2>Verification evidence</h2><p class="section-intro">Validated client behavior, with clear limits on what was tested.</p></div></div>
+<div class="verification"><div><strong>37</strong><span>tests passed in the implementation turn</span></div><div><strong>6</strong><span>sample calls validated for this report</span></div><div><strong>0</strong><span>live API calls used for these samples</span></div></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">Evidence</th><th scope="col">What was checked</th></tr></thead><tbody><tr><td>36 behavior cases</td><td>Sync and async requests, correct routes and headers, normalization, invalid input, required UUIDs, error responses, receipt identity, malformed findings, score consistency, and client cleanup.</td></tr><tr><td>1 packaging case</td><td>Build a source distribution, rebuild a wheel outside the repository, install it, block private top-level imports, and rerun behavioral checks against that installation.</td></tr><tr><td>Code reuse checks</td><td>The packaging test compares bundled SDK files with the source wheel after import relocation.</td></tr><tr><td>Build artifacts</td><td>Both <code>aidr-0.1.0-py3-none-any.whl</code> and <code>aidr-0.1.0.tar.gz</code> were built.</td></tr><tr><td>Static verification</td><td>The selected Ruff checks and Git whitespace check passed during implementation.</td></tr><tr><td>Report samples</td><td>Six additional calls used HTTPX MockTransport and the real public facade: mixed package scan, info score, high score, unscored result, scan rate limit, and guardrail service failure.</td></tr></tbody></table></div><div class="callout note"><strong>What these checks do not establish</strong><p>No live API request was made for the SDK implementation or this report. These checks do not establish deployed endpoint availability, issued-key acceptance, production pricing, model quality, latency, or Windows/Linux runtime compatibility. The checks ran locally on macOS with Python 3.14.</p></div><p>The test count refers to the recorded implementation check. The full suite was not rerun merely to generate this report. The six report-specific sample calls were executed and their outputs were checked separately.</p></section><section id="scope" class="report-section"><div class="section-heading"><span class="section-number">12</span><div><h2>Scope and deferred work</h2><p class="section-intro">The first release stays focused on scanning and guardrail assessments.</p></div></div><div class="table-wrap"><table><thead><tr><th scope="col">Available now</th><th scope="col">Deferred or not exposed</th></tr></thead><tbody><tr><td>Known-vulnerability checks for supplied npm/PyPI versions</td><td>Lockfile parsing, package installation, version resolution, other ecosystems, and transitive dependency discovery.</td></tr><tr><td>One guardrail assessment per explicit call</td><td>Hook installation, continuous session collection, automatic allow/deny enforcement, and local policy evaluation.</td></tr><tr><td>Sync and async Python APIs</td><td>A full command-line scanning interface, JavaScript SDK, and other language SDKs.</td></tr><tr><td>Validated assessment and billing outputs</td><td>Free enrollment helpers, capability discovery, credit balance methods, and automatic account setup in the public facade.</td></tr><tr><td>Existing client code bundled internally</td><td>Public detection, investigation, URL reputation, skill scanning, and separate prompt-injection methods.</td></tr></tbody></table></div><p>Detections and investigations remain deferred as requested. Publishing this package is a separate release step. Before calling it production-ready, verify the public methods against the intended deployed API with valid credentials and confirm the release packaging and account onboarding path.</p></section><section id="sources" class="report-section"><div class="section-heading"><span class="section-number">13</span><div><h2>Source notes</h2><p class="section-intro">Trace the report to the code, contracts, tests, and build inputs.</p></div></div><p>This report describes the local working tree on 05 November 2026. The SDK source was prepared for pull request review. Publication to PyPI is a separate release step. Source links below are relative to this report inside the repository; the report content itself is self-contained.</p><div class="source-list"><a href="../../packages/aidr/src/aidr/client.py"><strong>Public SDK</strong><span>AIDR, AsyncAIDR, scan and guardrail methods, receipt capture, cleanup, and errors.</span></a><a href="../../packages/aidr/README.md"><strong>SDK guide</strong><span>Usage instructions and documented integration boundaries.</span></a><a href="../../packages/aidr/pyproject.toml"><strong>Package metadata</strong><span>Version 0.1.0, Python requirement, runtime dependencies, and console entry point.</span></a><a href="../../packages/aidr/setup.py"><strong>Build and reuse</strong><span>Checksum verification, private namespace generation, source reuse, and bundled licenses.</span></a><a href="../../packages/aidr/tests/test_client.py"><strong>Behavior tests</strong><span>36 parameterized behavioral cases using simulated HTTP responses.</span></a><a href="../../packages/aidr/tests/test_packaging.py"><strong>Packaging test</strong><span>Standalone source archive, wheel rebuild, install, isolated imports, and behavioral checks.</span></a><a href="../../dependencies/api-runtime/manifest.json"><strong>Reviewed SDK manifest</strong><span>Pinned SDK artifact, provenance, and SHA-256 checksum.</span></a></div></section>
+<footer><span>OpenSecura · aidr SDK capabilities report</span><span>Generated 2026-11-05 13:47 PST · Local source snapshot</span></footer>
+</main></div><script>
+document.querySelectorAll('.tabset').forEach(function(group){
+  const buttons=Array.from(group.querySelectorAll('[role=tab]'));
+  function activate(button,focus){
+    buttons.forEach(function(item){const selected=item===button;item.setAttribute('aria-selected',String(selected));item.tabIndex=selected?0:-1;document.getElementById(item.dataset.target).hidden=!selected;});
+    if(focus) button.focus();
+  }
+  buttons.forEach(function(button,index){
+    button.addEventListener('click',function(){activate(button,false)});
+    button.addEventListener('keydown',function(event){
+      let next=index;
+      if(event.key==='ArrowRight') next=(index+1)%buttons.length;
+      else if(event.key==='ArrowLeft') next=(index+buttons.length-1)%buttons.length;
+      else if(event.key==='Home') next=0;
+      else if(event.key==='End') next=buttons.length-1;
+      else return;
+      event.preventDefault();activate(buttons[next],true);
+    });
+  });
+  activate(buttons[0],false);
+});
+document.querySelectorAll('.copy').forEach(function(button){
+  button.addEventListener('click',async function(){
+    const code=button.closest('.codebox').querySelector('code').textContent;
+    try{
+      await navigator.clipboard.writeText(code);
+      button.textContent='Copied';
+    }catch(error){
+      const selection=window.getSelection();const range=document.createRange();
+      range.selectNodeContents(button.closest('.codebox').querySelector('code'));
+      selection.removeAllRanges();selection.addRange(range);
+      button.textContent='Text selected';
+    }
+    setTimeout(function(){button.textContent='Copy'},1700);
+  });
+});
+document.getElementById('print').addEventListener('click',function(){window.print()});
+const links=Array.from(document.querySelectorAll('nav a'));
+if('IntersectionObserver' in window){
+ const observer=new IntersectionObserver(function(entries){
+   entries.forEach(function(entry){if(entry.isIntersecting){links.forEach(function(link){link.classList.toggle('active',link.getAttribute('href')==='#'+entry.target.id)})}});
+ },{rootMargin:'-10% 0px -65% 0px',threshold:0});
+ document.querySelectorAll('main section[id]').forEach(function(section){observer.observe(section)});
+}
+</script></body></html>

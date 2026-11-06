@@ -1,0 +1,108 @@
+[package]
+name = "openaidr-desktop"
+publish = false
+description = "Optional local setup and health console for the OpenAIDR sensor"
+authors = ["OpenSecura"]
+edition = "2021"
+rust-version = "1.90"
+
+[features]
+simulation = []
+e2e-ui = ["dep:tauri-plugin-wdio-webdriver"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+tempfile = "3"
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.build-dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+# Also used by Tauri's updater; keep rollout date handling platform independent.
+time = { version = "0.3", features = ["parsing"] }
+tauri-plugin-notification = "2.7"
+
+[target.'cfg(any(target_os = "macos", target_os = "linux", windows))'.dependencies]
+base64 = "0.22"
+minisign-verify = "0.2.5"
+tempfile = "3"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-wdio-webdriver = { version = "=1.5.0", optional = true }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSResponder", "NSAlert", "NSApplication", "NSButton", "NSControl", "NSView"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSFileManager", "NSURL", "NSError", "NSBundle", "NSPathUtilities", "NSString"] }
+libc = "0.2"
+plist = "1"
+semver = "1"
+socket2 = "0.6"
+tauri-plugin-updater = "~2.10.1"
+flate2 = "1"
+tar = "0.4"
+tokio = { version = "1", features = ["macros", "sync", "time"] }
+
+[target.'cfg(windows)'.dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "~2.10.1"
+tokio = { version = "1", features = ["macros", "sync", "time"] }
+getrandom = "0.3"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_UI_Shell"] }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSImage", "NSImageRep", "NSBitmapImageRep", "NSLayoutConstraint"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSRunLoop"] }
+tauri = { version = "2", features = ["test"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+gio = "0.18"
+getrandom = "0.3"
+libc = "0.2"
+tokio = { version = "1", features = ["macros", "sync", "time"] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+
+[[test]]
+name = "linux_tray"
+harness = false
+
+[[test]]
+name = "system_tray"
+harness = false
+
+[[test]]
+name = "window_fit"
+harness = false
+
+[[test]]
+name = "install_location"
+harness = false
+
+[[test]]
+name = "window_activation"
+harness = false
+
+# Keep release optimization partitions stable when CI enables incremental builds.
+[profile.release.package.openaidr-desktop]
+codegen-units = 16

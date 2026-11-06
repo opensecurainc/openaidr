@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="400" viewBox="0 0 660 400">
+  <rect width="660" height="400" fill="#ffffff"/>
+  <text x="330" y="77" text-anchor="middle" fill="#19396d"
+        font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif"
+        font-size="21" font-weight="500">Drag to Applications to install</text>
+  <path d="M286 190 H374 M359 175 L374 190 L359 205" fill="none"
+        stroke="#697586" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,8 @@
+{
+  "version": "5.23.1",
+  "platform": "darwin",
+  "architectures": ["arm64", "x86_64"],
+  "url": "https://github.com/osquery/osquery/releases/download/5.23.1/osqueryd-macos-bare-5.23.1.tar.gz",
+  "sha256": "8c10f293def8cda9734a4d8e734fac8d271032868f14c7bc4fcef789832602b6",
+  "member": "osqueryd"
+}

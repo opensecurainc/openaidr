@@ -1,0 +1,14 @@
+[[permission]]
+identifier = "allow-sensor-request"
+description = "Allow the fixed local sensor setup and status operations."
+commands.allow = ["sensor_request"]
+
+[[permission]]
+identifier = "allow-fit-window"
+description = "Allow the main window to set its height to fit its content, within fixed bounds."
+commands.allow = ["fit_window"]
+
+[[permission]]
+identifier = "allow-menu-bar"
+description = "Allow the local menu bar preference and health status commands."
+commands.allow = ["menu_bar_settings", "menu_bar_health"]

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardrail Configuration preview</title>
+<link rel="stylesheet" href="../fonts/geist.css">
+<script>if (window.frameElement) document.documentElement.classList.add("embedded");</script>
+<style>
+  :root {
+    --bg: #f4f6f9; --surface: #fff; --surface-2: #f8fafc; --border: #e3e8ef;
+    --text: #0f1b2d; --muted: #5b6b80; --faint: #8a98ab;
+    --nav: #0e1f3d; --nav-text: #c9d4e5;
+    --brand: #0b7a80; --brand-soft: #e3f3f3;
+    --ok: #157f4a; --ok-soft: #e4f5ec;
+    --warn: #a85d00; --warn-soft: #fff3e0;
+    --bad: #b42318; --bad-soft: #fdecea;
+    --info: #2f5bd3; --info-soft: #eaf0ff;
+    --note: #fff8d6; --note-border: #e9cf5b;
+    --radius: 10px; --shadow: 0 1px 2px rgba(15,27,45,.05);
+    --mono: "Geist Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 "Geist Sans", system-ui, sans-serif; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  code, pre, kbd, samp { font-family: var(--mono); }
+  [hidden] { display: none !important; }
+
+  .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  .nav { background: var(--nav); color: var(--nav-text); padding: 16px 12px; font-size: 13px; }
+  .nav .logo { color: #fff; font-weight: 700; font-size: 16px; display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .nav .logo span { width: 26px; height: 26px; border-radius: 6px; background: #fff; color: var(--nav); display: grid; place-items: center; font-size: 13px; }
+  .nav .org { font-size: 11px; opacity: .7; margin-bottom: 18px; }
+  .nav h6 { font-size: 11px; font-weight: 600; opacity: .55; margin: 16px 8px 6px; }
+  .nav a { display: block; padding: 6px 8px; border-radius: 6px; color: var(--nav-text); text-decoration: none; }
+  .nav a.active { background: rgba(255,255,255,.1); color: #fff; box-shadow: inset 3px 0 0 #3fc1c9; }
+  .main { min-width: 0; }
+  .topbar { height: 48px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; font-size: 13px; color: var(--muted); }
+  .topbar b { color: var(--text); font-weight: 500; }
+  .content { padding: 28px 32px 80px; max-width: 1080px; }
+
+  .page-head h1 { margin: 0; font-size: 24px; letter-spacing: -.01em; }
+  .page-head p { margin: 4px 0 24px; color: var(--muted); }
+
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 7px 14px; border-radius: 8px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; text-decoration: none; }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary { background: var(--nav); color: #fff; border-color: var(--nav); }
+  .btn.primary:hover { background: #1a2f55; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .link { border: 0; background: none; padding: 0; color: var(--brand); font-size: 12.5px; font-weight: 600; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  .step-head { display: flex; gap: 12px; align-items: flex-start; padding: 18px 20px 0; }
+  .step-num { width: 26px; height: 26px; border-radius: 50%; background: var(--nav); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; margin-top: 1px; }
+  .step-head h2 { margin: 0; font-size: 16px; }
+  .step-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .step-body { padding: 16px 20px 20px 58px; }
+  .stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ask-box textarea { min-width: 0; }
+
+  /* 1. upload */
+  .drop { border: 1.5px dashed #b7c4d6; border-radius: 10px; padding: 22px 16px; text-align: center; background: var(--surface-2); cursor: pointer; transition: background .15s, border-color .15s; }
+  .drop:hover, .drop.over { border-color: var(--brand); background: var(--brand-soft); }
+  .drop b { display: block; color: var(--brand); font-size: 14px; }
+  .drop small { color: var(--muted); font-size: 12px; }
+  .docs { margin-top: 12px; }
+  .doc { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .doc:last-child { border-bottom: 0; }
+  .doc .ico { width: 30px; height: 36px; border-radius: 4px; background: #eef2f7; border: 1px solid var(--border); display: grid; place-items: center; font-size: 9px; font-weight: 800; color: var(--muted); flex: none; }
+  .doc .ico.pdf { color: var(--bad); } .doc .ico.docx { color: var(--info); }
+  .doc .info { flex: 1; min-width: 0; }
+  .doc b { font-size: 13.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc small { color: var(--muted); font-size: 12px; }
+  .state { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .state.ok { color: var(--ok); }
+  .state.busy { color: var(--muted); }
+  .doc .rm { opacity: 0; }
+  .doc:hover .rm { opacity: 1; }
+  .fine { font-size: 12px; color: var(--faint); margin-top: 10px; }
+
+  /* 2. describe */
+  .ask-box { display: flex; gap: 10px; align-items: flex-end; border: 1px solid var(--border); border-radius: 10px; padding: 10px 10px 10px 14px; background: var(--surface-2); }
+  .ask-box:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); background: #fff; }
+  .ask-box textarea { flex: 1; border: 0; background: transparent; resize: none; font: inherit; font-size: 15px; min-height: 44px; outline: none; color: var(--text); }
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .examples span { font-size: 12px; color: var(--faint); }
+  .ex { border: 1px dashed #b7c4d6; background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
+  .ex:hover { border-style: solid; border-color: var(--brand); color: var(--brand); }
+  .thinking { margin-top: 14px; color: var(--muted); font-size: 13px; display: flex; gap: 10px; align-items: center; }
+  .dots i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--brand); margin-right: 3px; animation: blink 1s infinite; }
+  .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+
+  .result { margin-top: 14px; border: 1px solid #c9d8ec; border-radius: 10px; background: #fbfcfe; padding: 16px; }
+  .result .lbl { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+  .result .rule { font-size: 16px; font-weight: 600; line-height: 1.5; }
+  .result .row { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .result .row > span { font-size: 12.5px; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 2px; }
+  .seg button { border: 0; background: transparent; padding: 5px 14px; border-radius: 6px; color: var(--muted); font-size: 13px; }
+  .seg button.on[data-v="warn"] { background: var(--info); color: #fff; }
+  .seg button.on[data-v="ask"] { background: #c97a00; color: #fff; }
+  .seg button.on[data-v="block"] { background: var(--bad); color: #fff; }
+  .impact { margin-top: 14px; font-size: 13px; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); }
+  .impact b { font-variant-numeric: tabular-nums; }
+  .impact ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+  .impact code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .result .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+
+  /* tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .tabs button { border: 0; background: none; padding: 10px 14px; font-size: 14px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 8px; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--nav); }
+  .tab-n { font-size: 11.5px; font-weight: 700; background: #eef0f3; color: var(--muted); border-radius: 999px; padding: 1px 7px; }
+  .tabs button.on .tab-n { background: var(--nav); color: #fff; }
+  .sub-head { font-size: 12px; font-weight: 600; color: var(--muted); margin: 18px 0 2px; }
+  .sub-head span { color: var(--faint); font-weight: 400; }
+  /* voice */
+  .mic { width: 36px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--muted); display: grid; place-items: center; flex: none; }
+  .mic:hover { color: var(--brand); border-color: var(--brand); }
+  .mic.rec { background: var(--bad); border-color: var(--bad); color: #fff; animation: recpulse 1.4s infinite; }
+  @keyframes recpulse { 0% { box-shadow: 0 0 0 0 rgba(180,35,24,.45); } 70% { box-shadow: 0 0 0 8px rgba(180,35,24,0); } 100% { box-shadow: 0 0 0 0 rgba(180,35,24,0); } }
+  .listening { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--bad); margin-top: 8px; }
+  .wave { display: inline-flex; gap: 2px; align-items: center; height: 14px; }
+  .wave i { width: 3px; background: var(--bad); border-radius: 2px; animation: wave .9s infinite ease-in-out; }
+  .wave i:nth-child(2) { animation-delay: .1s; } .wave i:nth-child(3) { animation-delay: .2s; } .wave i:nth-child(4) { animation-delay: .3s; } .wave i:nth-child(5) { animation-delay: .4s; }
+  @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 14px; } }
+  /* written policies */
+  .pn { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .pn:last-child { border-bottom: 0; }
+  .pn .q { width: 30px; height: 30px; border-radius: 6px; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; flex: none; font-size: 15px; font-weight: 700; }
+  .pn .info { flex: 1; min-width: 0; }
+  .pn .info b { font-weight: 500; font-size: 13.5px; display: block; }
+  .pn .info small { color: var(--muted); font-size: 12px; }
+  .pn .rm { opacity: 0; }
+  .pn:hover .rm { opacity: 1; }
+  .pn.new { background: #f3fbf6; border-radius: 6px; }
+
+  /* list */
+  .list-head { display: flex; justify-content: space-between; align-items: baseline; margin: 32px 0 10px; gap: 12px; flex-wrap: wrap; }
+  .list-head h3 { margin: 0; font-size: 17px; }
+  .list-head span { color: var(--muted); font-size: 13px; }
+  .g { display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
+  .g:last-child { border-bottom: 0; }
+  .g .txt { flex: 1; min-width: 0; }
+  .g .txt b { font-weight: 500; font-size: 14px; display: block; }
+  .g .txt small { color: var(--faint); font-size: 12px; }
+  .g.off .txt, .g.off .pill { opacity: .45; }
+  .g.new { background: #f3fbf6; }
+  .g .rm { opacity: 0; }
+  .g:hover .rm { opacity: 1; }
+  .pill { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; min-width: 76px; text-align: center; flex: none; }
+  .pill.block { background: var(--bad-soft); color: var(--bad); }
+  .pill.ask { background: var(--warn-soft); color: var(--warn); }
+  .pill.warn { background: var(--info-soft); color: var(--info); }
+  .tog { width: 34px; height: 20px; border-radius: 999px; background: #cfd7e3; position: relative; border: 0; flex: none; }
+  .tog::after { content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .tog.on { background: var(--ok); }
+  .tog.on::after { left: 16px; }
+  .builtin { background: var(--surface-2); border-radius: 0 0 12px 12px; }
+  .builtin-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; font-size: 13px; color: var(--muted); cursor: pointer; gap: 12px; }
+  .builtin-head b { color: var(--text); font-weight: 600; }
+  .builtin .g { padding-left: 32px; }
+  .empty { padding: 22px 18px; color: var(--faint); font-size: 13px; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--nav); color: #fff; padding: 9px 16px; border-radius: 8px; font-size: 13px; z-index: 30; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+  .note-toggle { position: fixed; right: 20px; bottom: 20px; z-index: 10; background: var(--note); border: 1px solid var(--note-border); color: #5d4a00; border-radius: 999px; padding: 8px 14px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+  .note { display: none; background: var(--note); border: 1px solid var(--note-border); color: #4d3d00; border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; }
+  .note b.n { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #e0b400; color: #fff; font-size: 11px; margin-right: 6px; }
+  body.notes .note { display: block; }
+
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; } .nav { display: none; } .content { padding: 16px; }
+    .step-body { padding: 14px 16px 18px; }
+    .ask-box { flex-direction: column; align-items: stretch; }
+    .g { padding: 12px 14px; flex-wrap: wrap; }
+    .g .txt { flex-basis: 100%; }
+    .doc .rm, .g .rm, .pn .rm { opacity: 1; }
+    .ask-box .mic { align-self: flex-start; }
+    .tabs button { padding: 10px 8px; font-size: 13px; }
+  }
+  /* Inside the console: the console supplies navigation, the page title and the sample-data notice. */
+  html.embedded .nav, html.embedded .topbar, html.embedded .page-head, html.embedded .note-toggle, html.embedded .note { display: none !important; }
+  html.embedded .shell { grid-template-columns: 1fr; min-height: 0; }
+  html.embedded .content { padding: 2px 2px 24px; max-width: none; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="nav">
+    <div class="logo"><span>◆</span>OpenAIDR</div>
+    <div class="org">Northwind Labs · Production</div>
+    <h6>Overview</h6><a href="#">Overview</a><a href="#">User Risk</a>
+    <h6>AI Asset Management</h6><a href="#">AI Inventory</a><a href="#">AI Supply Chain Inventory</a>
+    <h6>Detection and Response</h6><a href="#">Detection Queue</a><a href="#">Evidence Search</a>
+    <h6>Real-time Guardrail</h6><a href="#">Live Guardrail</a><a href="#">Guardrail History</a><a href="#">Company Policy</a><a href="#" class="active">Guardrail Configuration</a>
+    <h6>Administration</h6><a href="#">Settings</a>
+  </aside>
+  <main class="main">
+    <div class="topbar"><div>Real-time Guardrail › <b>Guardrail Configuration</b></div></div>
+    <div class="content">
+      <div class="note"><b class="n">0</b><b>One job: turn intent into guardrails.</b> Type or say a sentence, confirm the generated guardrail, and it joins the list of guardrails in effect below. Uploading company policy lives on its own page.</div>
+
+      <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:24px">
+        <div><h1>Guardrail Configuration</h1><p style="margin-bottom:0">Describe what agents should or shouldn't do, in your own words. See every guardrail in effect below.</p></div>
+      </div>
+
+        <div class="stack">
+          <section class="card">
+            <div class="step-head"><div class="step-num">1</div><div><h2>Create a guardrail</h2><p>Type or say what agents should or shouldn't do. You'll see the guardrail before it's added.</p></div></div>
+            <div class="step-body">
+              <div class="note"><b class="n">1</b>Type or say a sentence and get back <b>one plain sentence</b> to confirm, <b>one choice</b> (Warn / Ask / Block) and <b>one number</b> (how often it would have applied last week). Whether it runs as a regex or a model check is decided automatically.</div>
+              <div class="ask-box">
+                <textarea id="askInput" rows="2" placeholder="e.g. Don't let agents push directly to main"></textarea>
+                <button class="mic" id="askMic" aria-label="Speak a guardrail (sample transcript)" title="Voice preview: types a sample transcript"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                <button class="btn primary" id="createBtn">Create</button>
+              </div>
+              <div class="listening" id="askListening" hidden><span class="wave"><i></i><i></i><i></i><i></i><i></i></span>Voice preview: typing a sample transcript. No audio is recorded.</div>
+              <div class="examples"><span>Examples:</span>
+                <button class="ex" data-create>Don't let agents push directly to main</button>
+                <button class="ex" data-create>Never send customer data to AI tools we haven't approved</button>
+                <button class="ex" data-create>Ask before running Terraform apply in prod</button>
+              </div>
+              <div class="thinking" id="thinking" hidden><span class="dots"><i></i><i></i><i></i></span>Creating guardrail…</div>
+              <div class="result" id="result" hidden></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="list-head"><h3>Guardrails in effect</h3><span id="listCount"></span></div>
+        <div class="note"><b class="n">2</b>Each row is a readable sentence with a decision and an on/off switch. The built-in safety rules are folded into one row so they don't push your own guardrails down the page.</div>
+        <div class="card" id="list"></div>
+    </div>
+  </main>
+</div>
+
+<button class="note-toggle" id="noteToggle">Show design notes</button>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const DEC = { warn: "Warn", ask: "Ask first", block: "Block" };
+  const VERB = { warn: "warn when", ask: "ask before", block: "block" };
+  const toast = (m) => { const t = $("toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2200); };
+
+  /* ---------- 2. natural-language guardrail ---------- */
+  const presets = {
+    "don't let agents push directly to main": { what: "agents pushing directly to main or a release branch", dec: "block", n: 9, ex: ["git push origin main · m.chen · Oct 12", "git push origin HEAD:release/2.14 · a.okafor · Oct 11"] },
+    "never send customer data to ai tools we haven't approved": { what: "agents sending customer data to an AI tool that isn't on your approved list", dec: "block", n: 2, ex: ["Upload of customers_export.csv to pastebin.com · m.chen · Oct 12", "Notion page \"Q3 churn list\" · r.kim · Oct 9"] },
+    "ask before running terraform apply in prod": { what: "agents running terraform apply in production", dec: "ask", n: 3, ex: ["terraform apply -auto-approve · s.patel · Oct 13", "terraform apply -target=module.ledger · s.patel · Oct 8"] },
+  };
+  let cur = null;
+  function sentence(d) { return `Guardrail will <span style="color:var(--${d.dec === "block" ? "bad" : d.dec === "ask" ? "warn" : "info"})">${VERB[d.dec]}</span> ${esc(d.what)}.`; }
+  function renderResult() {
+    const d = cur;
+    $("result").innerHTML = `
+      <div class="lbl">New guardrail</div>
+      <div class="rule">${sentence(d)}</div>
+      <div class="row"><span>When it applies:</span><div class="seg" id="decSeg">${["warn", "ask", "block"].map((v) => `<button data-v="${v}" class="${d.dec === v ? "on" : ""}">${DEC[v]}</button>`).join("")}</div></div>
+      <div class="impact">${d.n
+        ? `In the last 7 days this would have applied <b>${d.n} times</b>.<ul>${d.ex.map((x) => `<li><code>${esc(x)}</code></li>`).join("")}</ul>`
+        : "Nothing in the last 7 days would have matched. It will apply from now on."}</div>
+      <div class="foot"><button class="btn ghost" id="cancel">Cancel</button><button class="btn primary" id="add">Add guardrail</button></div>`;
+    $("decSeg").onclick = (e) => { const b = e.target.closest("button"); if (b) { d.dec = b.dataset.v; renderResult(); } };
+    $("cancel").onclick = () => { $("result").hidden = true; cur = null; };
+    $("add").onclick = () => {
+      rules.unshift({ what: d.what, dec: d.dec, on: true, by: "Added by you · just now", isNew: true });
+      $("result").hidden = true; $("askInput").value = ""; cur = null; renderList(); toast("Guardrail added");
+    };
+  }
+  function create(text) {
+    text = text.trim(); if (!text) { $("askInput").focus(); return; }
+    const p = presets[text.toLowerCase().replace(/[.!]$/, "")];
+    cur = p ? { ...p } : { what: "agent actions that match: “" + text + "”", dec: "ask", n: 0, ex: [] };
+    $("result").hidden = true; $("thinking").hidden = false;
+    setTimeout(() => { $("thinking").hidden = true; $("result").hidden = false; renderResult(); }, 650);
+  }
+  $("createBtn").onclick = () => create($("askInput").value);
+  $("askInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); create($("askInput").value); } });
+  document.querySelectorAll(".ex").forEach((b) => (b.onclick = () => { $("askInput").value = b.textContent; create(b.textContent); }));
+
+  /* ---------- list ---------- */
+  const rules = [
+    { what: "changes to production data or infrastructure that skip review", dec: "ask", on: true, by: "Added by j.alvarez · Oct 5" },
+    { what: "secrets or customer data sent to unapproved destinations", dec: "block", on: true, by: "Added by j.alvarez · Oct 5" },
+  ];
+  const builtin = [
+    { what: "recursive delete of / or the home directory", dec: "block", on: true },
+    { what: "piping a download straight into a shell (curl … | sh)", dec: "block", on: true },
+    { what: "git force push", dec: "warn", on: true },
+    { what: "reading cloud credentials (~/.aws, ~/.kube)", dec: "warn", on: true },
+    { what: "reading SSH keys (~/.ssh)", dec: "warn", on: true },
+    { what: "integration test marker command", dec: "block", on: true },
+  ];
+  let builtinOpen = false;
+  const row = (r, i, kind) => `
+    <div class="g${r.on ? "" : " off"}${r.isNew ? " new" : ""}">
+      <span class="pill ${r.dec}">${DEC[r.dec]}</span>
+      <div class="txt"><b>${esc(r.what.charAt(0).toUpperCase() + r.what.slice(1))}</b>${r.by ? `<small>${esc(r.by)}</small>` : ""}</div>
+      ${kind === "rule" ? `<button class="btn ghost rm" data-del="${i}">Delete</button>` : ""}
+      <button class="tog${r.on ? " on" : ""}" data-tog="${kind}:${i}" aria-label="Turn on or off"></button>
+    </div>`;
+  function renderList() {
+    $("list").innerHTML =
+      (rules.length ? rules.map((r, i) => row(r, i, "rule")).join("") : `<div class="empty">You haven't added any guardrails yet. Describe one above.</div>`) +
+      `<div class="builtin"><div class="builtin-head" id="bhead"><span><b>${builtin.length} built-in safety rules</b> · e.g. block <code>rm -rf /</code>, block <code>curl | sh</code></span><button class="link">${builtinOpen ? "Hide" : "Show"}</button></div>
+        ${builtinOpen ? builtin.map((r, i) => row(r, i, "builtin")).join("") : ""}</div>`;
+    const on = rules.filter((r) => r.on).length + builtin.filter((r) => r.on).length;
+    $("listCount").textContent = `${on} on`;
+  }
+  $("list").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-tog]");
+    if (t) { const [k, i] = t.dataset.tog.split(":"); const r = (k === "rule" ? rules : builtin)[+i]; r.on = !r.on; renderList(); return; }
+    const d = e.target.closest("[data-del]");
+    if (d) { rules.splice(+d.dataset.del, 1); renderList(); toast("Guardrail deleted"); return; }
+    if (e.target.closest("#bhead")) { builtinOpen = !builtinOpen; renderList(); }
+  });
+
+  /* ---------- voice input ---------- */
+  // Sample-only: the preview never records audio or calls speech recognition, which in
+  // Chromium streams microphone audio to the browser vendor. It types a sample transcript.
+  function voice(btn, input, banner, samples, onDone) {
+    let timer = null, k = 0;
+    const stop = () => { btn.classList.remove("rec"); banner.hidden = true; clearInterval(timer); timer = null; };
+    btn.onclick = () => {
+      if (btn.classList.contains("rec")) { stop(); onDone && onDone(); return; }
+      btn.classList.add("rec"); banner.hidden = false;
+      const words = samples[k++ % samples.length].split(" "); let i = 0; input.value = "";
+      timer = setInterval(() => { input.value += (i ? " " : "") + words[i++]; if (i >= words.length) { stop(); onDone && onDone(); } }, 110);
+    };
+  }
+  voice($("askMic"), $("askInput"), $("askListening"),
+    ["Ask before running Terraform apply in prod", "Don't let agents push directly to main"],
+    () => { if ($("askInput").value.trim()) create($("askInput").value); });
+
+  $("noteToggle").onclick = () => { const on = document.body.classList.toggle("notes"); $("noteToggle").textContent = on ? "Hide design notes" : "Show design notes"; };
+
+  renderList();
+</script>
+</body>
+</html>

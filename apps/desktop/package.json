@@ -1,0 +1,23 @@
+{
+  "name": "openaidr-desktop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --host 127.0.0.1",
+    "tauri": "tauri",
+    "test:web": "playwright test"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-notification": "~2.7.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tauri-apps/cli": "^2.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.7"
+  }
+}

@@ -1,0 +1,94 @@
+name: PyPI
+
+on:
+  push:
+    tags:
+      - 'aidr-v*'
+      - 'opensecura-v*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package directory under packages/
+        type: choice
+        options:
+          - aidr
+          - opensecura
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      package: ${{ steps.select.outputs.package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+      - name: Select the package and check its version
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_PACKAGE: ${{ inputs.package }}
+        run: |
+          if [ "$EVENT_NAME" = push ]; then
+            package="${REF_NAME%-v*}"
+            version="${REF_NAME##*-v}"
+          else
+            package="$INPUT_PACKAGE"
+            version=""
+          fi
+          case "$package" in
+            aidr|opensecura) ;;
+            *) echo "unknown package: $package" >&2; exit 1 ;;
+          esac
+          declared=$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "packages/$package/pyproject.toml")
+          if [ -n "$version" ] && [ "$version" != "$declared" ]; then
+            echo "tag version $version does not match packages/$package/pyproject.toml version $declared" >&2
+            exit 1
+          fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+      - name: Build and check the distributions
+        env:
+          PACKAGE: ${{ steps.select.outputs.package }}
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build --outdir dist "packages/$PACKAGE"
+          python -m twine check dist/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: dist-${{ steps.select.outputs.package }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish ${{ needs.build.outputs.package }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.build.outputs.package }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: dist-${{ needs.build.outputs.package }}
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist
+          print-hash: true

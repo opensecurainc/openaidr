@@ -1,0 +1,32 @@
+{
+  "name": "@openaidr/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures": "./src/fixtures/index.ts",
+    "./styles.css": "./src/styles.css",
+    "./tokens.css": "./tokens.css",
+    "./opensecura-mark.svg": "./opensecura-mark.svg",
+    "./opensecura-mark-dark.svg": "./opensecura-mark-dark.svg"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router": "^7.5.0",
+    "recharts": "^2.15.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router": "^7.5.0",
+    "recharts": "^2.15.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.4.4"
+  }
+}

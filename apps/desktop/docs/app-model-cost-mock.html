@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenAIDR app and model cost preview</title>
+  <link rel="stylesheet" href="../src/style.css">
+  <style>
+    :root{--codex:#10a37f;--astra:#0c785e;--sol:#10a37f;--luna:#77d3b9;--claude:#c46d50;--opus:#a84e35;--sonnet:#df987b}
+    @media(prefers-color-scheme:dark){:root{--astra:#10a37f;--sol:#49bea0;--luna:#94e0c9;--claude:#df987b;--opus:#d97757;--sonnet:#edbda5}}
+    body{max-width:640px;margin:auto}
+    .sample-label{color:var(--muted);font-size:11px}
+    .cost-legend{display:flex;align-items:center;gap:16px;margin:8px 0 4px;font-size:11px}
+    .cost-legend>span{display:flex;align-items:center;gap:6px}.cost-legend small{margin-left:auto;color:var(--muted);font-size:10px}
+    .swatch{display:inline-block;width:9px;height:9px;flex-shrink:0;border-radius:2px;background:var(--series-color)}
+    [data-app=codex]{--series-color:var(--codex)}[data-app=claude]{--series-color:var(--claude)}
+    [data-model=astra]{--series-color:var(--astra)}[data-model=sol]{--series-color:var(--sol)}[data-model=luna]{--series-color:var(--luna)}[data-model=opus]{--series-color:var(--opus)}[data-model=sonnet]{--series-color:var(--sonnet)}
+    #usage-plot{margin-top:0}.usage-chart{height:130px}.usage-stack{width:100%;display:flex;flex-direction:column-reverse;overflow:hidden;border-radius:3px 3px 0 0}
+    .usage-stack>span{width:100%;flex-shrink:0;background:var(--series-color)}
+    .usage-stack>span:nth-child(4){border-bottom:1px solid var(--surface)}
+    .usage-day:hover .usage-stack,.usage-day:focus .usage-stack{outline:1px solid var(--text);outline-offset:2px}
+    .usage-axis>span{white-space:nowrap}.usage-axis{font-size:9px}
+    .usage-breakdowns{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+    .app-group{margin-top:9px}.app-group+.app-group{padding-top:8px;border-top:1px solid var(--border)}
+    .app-heading{display:flex;align-items:center;gap:6px;font-size:12px}.app-heading strong{font-weight:650}.app-heading b{margin-left:auto;font-weight:650;font-variant-numeric:tabular-nums}
+    .model-row{display:grid;grid-template-columns:9px minmax(0,1fr) auto;align-items:center;gap:6px;margin:5px 0 0 15px;font-size:11px;line-height:14px}
+    .model-row .model-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.model-row b{font-weight:500;font-variant-numeric:tabular-nums}
+    .usage-tooltip{position:fixed;top:auto;left:0;width:236px;max-height:calc(100vh - 16px);overflow:auto;font-size:11px;pointer-events:auto;z-index:3}
+    .usage-tooltip .tooltip-total{padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid var(--border)}
+    .usage-tooltip .tooltip-app{margin-top:7px;font-weight:650}.usage-tooltip .tooltip-app>span{display:flex;align-items:center;gap:6px}.usage-tooltip .tooltip-app>b{font-weight:650}
+    .usage-tooltip .tooltip-model{padding-left:15px;line-height:18px}.tooltip-model>span{display:flex;align-items:center;gap:6px}
+    .effort-note{color:var(--muted);font-size:10px;margin:10px 0 0}
+    footer{margin-top:8px}footer span:last-child{margin-left:auto}
+  </style>
+</head>
+<body>
+  <div id="app"><main>
+    <header><div class="brand"><img src="../public/icon.svg" alt=""><div>OpenAIDR</div></div><span class="sample-label">Design preview · Sample data</span></header>
+    <section id="usage-panel" aria-label="Your usage">
+      <div class="usage-heading"><h1>Your usage</h1><div class="usage-period" role="group" aria-label="Usage period"><button data-days="14" aria-pressed="false">14 days</button><button data-days="30" aria-pressed="true">30 days</button></div></div>
+      <section class="usage-card" aria-label="Usage trend">
+        <div class="usage-totals"><div><span>Total Tokens</span><strong id="usage-tokens"></strong></div><div><span>Estimated Cost (API Equivalent)</span><strong id="usage-cost"></strong></div></div>
+        <div class="usage-chart-heading"><h2>Daily estimated cost</h2><span id="usage-range"></span></div>
+        <div class="cost-legend" aria-label="Chart colors"><span data-app="codex"><i class="swatch" aria-hidden="true"></i>Codex</span><span data-app="claude"><i class="swatch" aria-hidden="true"></i>Claude Code</span><small>Shades identify models</small></div>
+        <div id="usage-plot"><div id="usage-chart" class="usage-chart" role="group" aria-label="Daily estimated cost by app and model"></div></div>
+        <div id="usage-axis" class="usage-axis"></div>
+        <dl class="usage-metrics"><div><dt>Daily average</dt><dd id="usage-average"></dd></div><div><dt id="usage-peak-label">Peak day</dt><dd id="usage-peak"></dd></div><div><dt>Yesterday</dt><dd id="usage-yesterday"></dd></div></dl>
+      </section>
+      <div class="usage-breakdowns">
+        <section class="usage-card"><div class="usage-chart-heading"><h2>Applications &amp; models</h2><span>Est. cost</span></div><div id="application-models"></div></section>
+        <section class="usage-card"><div class="usage-chart-heading"><h2>Reasoning effort</h2><span>Est. cost</span></div><div id="usage-efforts"></div><p class="effort-note">Same period, grouped by reported effort.</p></section>
+      </div>
+    </section>
+    <footer><span>Mock UI</span><span>Hover or focus a day for the breakdown</span></footer>
+  </main></div>
+  <div id="usage-tooltip" class="usage-tooltip" role="tooltip" hidden></div>
+  <script>
+    // Illustrative app attribution only. Production usage does not retain app identity yet.
+    const models = [
+      {id:'astra',app:'codex',name:'gpt-6-astra',total:49832},
+      {id:'sol',app:'codex',name:'gpt-6.1-sol',total:23720},
+      {id:'luna',app:'codex',name:'gpt-6-luna',total:1460},
+      {id:'opus',app:'claude',name:'claude-opus-5-5',total:26348},
+      {id:'sonnet',app:'claude',name:'claude-sonnet-5',total:8558},
+    ];
+    const apps = [{id:'codex',name:'Codex'},{id:'claude',name:'Claude Code'}];
+    const weights = [0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,3,2,4,3,2,5,7,4,6,8,5,9,12,22,29];
+    const series = weights.map((_,i) => ({date:new Date(Date.UTC(2026,8,10+i)).toISOString().slice(0,10),costs:[]}));
+    models.forEach((model,j) => {
+      const shares = weights.map((weight,i) => weight * (0.72 + ((i*3+j*7)%11)/14));
+      const sum = shares.reduce((a,b) => a+b,0);
+      let assigned = 0;
+      series.forEach((day,i) => {const cost = i === 29 ? model.total-assigned : Math.floor(model.total*shares[i]/sum); day.costs.push(cost); assigned += cost;});
+    });
+    const money = cents => (cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'});
+    const dayLabel = day => new Date(day+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const total = costs => costs.reduce((a,b) => a+b,0);
+    const node = id => document.getElementById(id);
+    const tooltip = node('usage-tooltip');
+    let activeBar;
+    function closeTooltip(){tooltip.hidden=true;activeBar?.removeAttribute('aria-describedby');activeBar=undefined;}
+    function showTooltip(day,bar){
+      closeTooltip(); activeBar=bar; bar.setAttribute('aria-describedby','usage-tooltip');
+      tooltip.innerHTML = `<strong>${dayLabel(day.date)}</strong><div class="tooltip-total"><span>Estimated cost</span><b>${money(total(day.costs))}</b></div>`;
+      apps.forEach(app => {
+        const entries = models.map((model,i) => ({...model,cost:day.costs[i]})).filter(model => model.app === app.id);
+        const heading = document.createElement('div');heading.className='tooltip-app';heading.dataset.app=app.id;
+        heading.innerHTML=`<span><i class="swatch" aria-hidden="true"></i>${app.name}</span><b>${money(total(entries.map(model => model.cost)))}</b>`;
+        tooltip.append(heading);
+        entries.forEach(model => {const row=document.createElement('div');row.className='tooltip-model';row.dataset.model=model.id;
+          row.innerHTML=`<span><i class="swatch" aria-hidden="true"></i>${model.name}</span><b>${money(model.cost)}</b>`;tooltip.append(row);});
+      });
+      tooltip.hidden=false;
+      positionTooltip();
+    }
+    function positionTooltip(){
+      if(!activeBar)return;
+      const rect=activeBar.getBoundingClientRect(),box=tooltip.getBoundingClientRect();
+      if(rect.bottom<=0 || rect.top>=innerHeight){closeTooltip();return;}
+      const left=rect.left>innerWidth/2 ? rect.left-box.width-8 : rect.right+8;
+      tooltip.style.left=`${Math.max(8,Math.min(left,innerWidth-box.width-8))}px`;
+      tooltip.style.top=`${Math.max(8,Math.min(rect.bottom-box.height,innerHeight-box.height-8))}px`;
+    }
+    function render(days){
+      closeTooltip();
+      const visible=series.slice(-days),sums=models.map((_,i) => total(visible.map(day => day.costs[i])));
+      const sum=total(sums),maximum=Math.max(...visible.map(day => total(day.costs))),peak=visible.find(day => total(day.costs)===maximum);
+      node('usage-cost').textContent=money(sum);
+      const compact=new Intl.NumberFormat('en-US',{notation:'compact',minimumFractionDigits:1,maximumFractionDigits:1});
+      const tokens=value=>compact.formatToParts(value).map(part=>part.type==='compact' ? ` ${part.value}` : part.value).join('');
+      node('usage-tokens').innerHTML=`<span>${tokens(2040000000*sum/109918)} in</span> <small>(98% cached)</small> <span>/ ${tokens(10000000*sum/109918)} out</span>`;
+      node('usage-tokens').title='Sample token counts. Cache rate is cached input divided by total input.';
+      node('usage-average').textContent=money(sum/days);node('usage-peak').textContent=money(maximum);
+      node('usage-peak-label').textContent=`Peak · ${dayLabel(peak.date)}`;node('usage-yesterday').textContent=money(total(visible.at(-2).costs));
+      node('usage-range').textContent=`Last ${days} days`;
+      node('usage-chart').replaceChildren(...visible.map(day => {
+        const bar=document.createElement('div');bar.className='usage-day';bar.tabIndex=0;bar.dataset.date=day.date;bar.setAttribute('role','img');
+        bar.setAttribute('aria-label',`${dayLabel(day.date)}: ${money(total(day.costs))}. ${models.map((model,i) => `${apps.find(app => app.id===model.app).name}, ${model.name}: ${money(day.costs[i])}`).join('; ')}`);
+        const stack=document.createElement('div');stack.className='usage-stack';stack.style.height=`${total(day.costs)/maximum*100}%`;stack.setAttribute('aria-hidden','true');
+        models.forEach((model,i) => {const segment=document.createElement('span');segment.dataset.model=model.id;segment.style.height=`${total(day.costs) ? day.costs[i]/total(day.costs)*100 : 0}%`;stack.append(segment);});
+        bar.append(stack);bar.addEventListener('pointerenter',()=>showTooltip(day,bar));bar.addEventListener('focus',()=>showTooltip(day,bar));bar.addEventListener('blur',closeTooltip);return bar;
+      }));
+      node('usage-axis').classList.toggle('usage-axis-daily',days===14);
+      node('usage-axis').replaceChildren(...(days===14 ? visible : [visible[0],visible.at(-1)]).map(day=>{const label=document.createElement('span');label.textContent=dayLabel(day.date);return label;}));
+      node('application-models').replaceChildren(...apps.map(app=>{
+        const group=document.createElement('div');group.className='app-group';group.dataset.app=app.id;
+        const entries=models.map((model,i)=>({...model,cost:sums[i]})).filter(model=>model.app===app.id);
+        group.innerHTML=`<div class="app-heading"><i class="swatch" aria-hidden="true"></i><strong>${app.name}</strong><b>${money(total(entries.map(model=>model.cost)))}</b></div>`;
+        entries.forEach(model=>{const row=document.createElement('div');row.className='model-row';row.dataset.model=model.id;
+          row.innerHTML=`<i class="swatch" aria-hidden="true"></i><span class="model-name">${model.name}</span><b>${money(model.cost)}</b>`;group.append(row);});return group;
+      }));
+      const efforts=[['Extra high',.46],['High',.31],['Medium',.17],['Unknown',.06]];
+      let assigned=0;
+      node('usage-efforts').replaceChildren(...efforts.map(([name,share],i)=>{const amount=i===efforts.length-1 ? sum-assigned : Math.round(sum*share);assigned+=amount;
+        const row=document.createElement('div');row.className='usage-row';row.innerHTML=`<div><span>${name}</span><span>${money(amount)}</span></div><div class="usage-track"><div style="width:${share/.46*100}%"></div></div>`;return row;}));
+      document.querySelectorAll('[data-days]').forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.days)===days)));
+    }
+    document.querySelectorAll('[data-days]').forEach(button=>button.addEventListener('click',()=>render(Number(button.dataset.days))));
+    document.addEventListener('keydown',event=>{if(event.key==='Escape')closeTooltip();});
+    document.addEventListener('pointermove',event=>{if(!event.target.closest('.usage-day,.usage-tooltip')&&!document.activeElement.closest('.usage-day'))closeTooltip();});
+    node('app').addEventListener('scroll',positionTooltip);window.addEventListener('resize',closeTooltip);
+    render(30);
+  </script>
+</body>
+</html>

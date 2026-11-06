@@ -1,0 +1,105 @@
+name: E2E macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: Agents to exercise with real model requests
+        type: choice
+        options: [claude, codex, both]
+        default: claude
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  smoke:
+    name: Installed app, agents, backend and dashboard
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      E2E_AGENTS: ${{ inputs.agents }}
+      E2E_OUTPUT: ${{ github.workspace }}/build/e2e
+      NEXT_TELEMETRY_DISABLED: '1'
+      DASHBOARD_API_PROXY: http://127.0.0.1:8081
+      CODEX_VERSION: '0.163.0'
+      CLAUDE_VERSION: '2.1.306'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - name: Check selected agent credentials
+        id: credentials
+        env:
+          E2E_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          E2E_CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [[ "$E2E_AGENTS" != claude && -z "$E2E_OPENAI_API_KEY" ]]; then
+            echo '::error::Add OPENAI_API_KEY or select claude.'
+            exit 1
+          fi
+          if [[ "$E2E_AGENTS" != codex && -z "$E2E_CLAUDE_TOKEN" ]]; then
+            echo '::error::Add CLAUDE_CODE_OAUTH_TOKEN or select codex.'
+            exit 1
+          fi
+      - name: Install build and test dependencies
+        id: dependencies
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+          rustup default stable
+          python -m pip install --no-index --no-deps dependencies/api-runtime/*.whl
+          python -m pip install -e '.[desktop,dev]'
+          pnpm install --frozen-lockfile
+          pnpm --filter openaidr-desktop exec playwright install chromium
+          brew install postgresql@16
+          echo "$(brew --prefix postgresql@16)/bin" >> "$GITHUB_PATH"
+          npm install --global "@openai/codex@$CODEX_VERSION" "@anthropic-ai/claude-code@$CLAUDE_VERSION"
+          xcrun swiftc scripts/e2e_window.swift -o "$RUNNER_TEMP/e2e-window"
+      - name: Validate test harness
+        id: checks
+        run: |
+          python -m pytest -q tests/test_e2e_harness.py
+          pnpm --filter openaidr-desktop exec playwright test --config playwright.e2e.config.ts --list
+      - name: Build app and dashboard from this commit
+        id: build
+        run: |
+          python scripts/build_desktop.py
+          pnpm --filter openaidr-dashboard build
+      - name: Run macOS end-to-end tests
+        id: tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        env:
+          E2E_BUILD_OUTCOME: ${{ steps.build.outcome }}
+          E2E_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          E2E_CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: pnpm --filter openaidr-desktop exec playwright test --config playwright.e2e.config.ts
+      - name: Finalize report
+        if: always()
+        env:
+          E2E_STAGE_RESULTS: >-
+            {"credentials":"${{ steps.credentials.outcome }}","dependencies":"${{ steps.dependencies.outcome }}",
+            "checks":"${{ steps.checks.outcome }}","build":"${{ steps.build.outcome }}","tests":"${{ steps.tests.outcome }}"}
+        run: python3 scripts/e2e_report.py "$E2E_OUTPUT"
+      - name: Upload HTML report and evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: macos-e2e-report
+          path: ${{ env.E2E_OUTPUT }}/report/
+          if-no-files-found: error
+          retention-days: 14

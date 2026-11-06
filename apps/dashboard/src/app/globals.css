@@ -1,0 +1,350 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./brand.css";
+@custom-variant dark (&:is(.dark *));
+:root {
+  /* Semantic tokens derive from the --brand-* values generated in brand.css. */
+  --background: var(--brand-paper);
+  --foreground: var(--brand-ink);
+  --card: #ffffff;
+  --card-foreground: var(--brand-ink);
+  --popover: #fff;
+  --popover-foreground: var(--brand-ink);
+  --primary: var(--brand-navy);
+  --primary-foreground: #fff;
+  --secondary: color-mix(in srgb, var(--brand-navy) 8%, white);
+  --secondary-foreground: var(--brand-navy);
+  --muted: color-mix(in srgb, var(--brand-line) 35%, white);
+  --muted-foreground: var(--brand-slate);
+  --accent: color-mix(in srgb, var(--brand-navy) 8%, white);
+  --accent-foreground: var(--brand-navy);
+  --destructive: var(--brand-red);
+  --border: color-mix(in srgb, var(--brand-line) 65%, white);
+  --input: color-mix(in srgb, var(--brand-slate) 75%, white);
+  --ring: var(--brand-navy);
+  --radius: 0.5rem;
+  /* Categorical chart hues in fixed order: logs, metrics, traces. */
+  --chart-1: var(--brand-teal);
+  --chart-2: #a67fa9; /* Brand Plum at 71% over white. */
+  --chart-supply-chain-plugins: #527da8; /* Approved solid fourth series for supply-chain categories. */
+  --chart-model-cost-guardrail: #527da8; /* Solid fourth series for model cost categories. */
+  --chart-model-cost-verification: #7b6041;
+  --chart-model-cost-benchmark: #66558f;
+  --chart-3: #3b4351; /* Equal mix of brand Slate and Ink. */
+  /* Truncated, reversed gist_heat for reported reasoning effort. See COLORS.md. */
+  --chart-effort-none: #ffad5c;
+  --chart-effort-minimal: #ff7a00;
+  --chart-effort-low: #f54700;
+  --chart-effort-medium: #cf1400;
+  --chart-effort-high: #a80000;
+  --chart-effort-xhigh: #820000;
+  --chart-effort-max: #5c0000;
+  --chart-effort-ultra: #360000;
+  --chart-effort-unknown: var(--muted-foreground);
+  --chart-grid: var(--border);
+  --chart-axis: var(--brand-line);
+  /* Status: the state of a thing (healthy, delayed, failed). Not severity.
+     Each ships with a text label; tints are 10% of the hue. See COLORS.md. */
+  --status-critical: var(--brand-red);
+  --status-warning: var(--brand-gold);
+  --status-ok: var(--brand-green);
+  --status-info: var(--brand-navy);
+  --status-neutral: var(--brand-slate);
+  --overlay-shadow: 0 8px 24px rgb(15 34 68 / 0.14);
+  /* Severity: how serious a finding is. One hue per level, used for every
+     severity mark (bars, legends, dots, letter marks, badges). Validated in
+     COLORS.md: all-pair CVD separation >= 14.1, normal vision >= 15.8. The
+     -text step is the same hue darkened to >= 4.5:1 on its tint and on white. */
+  --severity-critical: #8b2b27;
+  --severity-critical-text: var(--brand-red);
+  --severity-high: #b56220;
+  --severity-high-text: var(--brand-orange);
+  --severity-medium: #d5a12e;
+  --severity-medium-text: var(--brand-gold);
+  --severity-low: #58758a;
+  --severity-low-text: #3d586d;
+  --severity-info: #9ea7b3;
+  --severity-info-text: var(--brand-slate);
+  /* Text set on a solid severity fill (letter marks): >= 4.5:1 on the mark. */
+  --severity-critical-on: #ffffff;
+  --severity-high-on: #000000;
+  --severity-medium-on: #000000;
+  --severity-low-on: #ffffff;
+  --severity-info-on: #000000;
+  /* Dark activity categories with readable white text on solid fills. */
+  --activity-prompt: #345e87;
+  --activity-tool: #66558f;
+  --activity-result: #2f6b63;
+  --activity-response: #3d528f;
+  --activity-decision: #7b6041;
+  --activity-session: #5b6472;
+  --sidebar: var(--brand-deep-navy);
+  --sidebar-foreground: #d5e0f2;
+  --sidebar-primary: #fff;
+  --sidebar-primary-foreground: var(--brand-navy);
+  --sidebar-accent: #ffffff12;
+  --sidebar-accent-foreground: #fff;
+  --sidebar-border: #ffffff16;
+  --sidebar-ring: #7195cc;
+}
+@theme inline {
+  /* Geist for the interface and Geist Mono for code (commands, payloads, file
+     contents, hashes, and identifiers in their own cell), as on ui.shadcn.com.
+     The variables come from next/font in layout.tsx. */
+  --font-*: initial;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Four sizes. Resetting the namespace removes every other text-* utility. */
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-display: 1.75rem;
+  --text-display--line-height: 2rem;
+  /* The one headline figure a view leads with; never for headings. */
+  --text-hero: 3rem;
+  --text-hero--line-height: 3.25rem;
+  --shadow-*: initial;
+  --shadow-overlay: var(--overlay-shadow);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-status-critical: var(--status-critical);
+  --color-status-warning: var(--status-warning);
+  --color-status-ok: var(--status-ok);
+  --color-status-info: var(--status-info);
+  --color-status-neutral: var(--status-neutral);
+  --color-severity-critical: var(--severity-critical);
+  --color-severity-high: var(--severity-high);
+  --color-severity-medium: var(--severity-medium);
+  --color-severity-low: var(--severity-low);
+  --color-severity-info: var(--severity-info);
+  --color-severity-critical-text: var(--severity-critical-text);
+  --color-severity-high-text: var(--severity-high-text);
+  --color-severity-medium-text: var(--severity-medium-text);
+  --color-severity-low-text: var(--severity-low-text);
+  --color-severity-info-text: var(--severity-info-text);
+  --color-severity-critical-on: var(--severity-critical-on);
+  --color-severity-high-on: var(--severity-high-on);
+  --color-severity-medium-on: var(--severity-medium-on);
+  --color-severity-low-on: var(--severity-low-on);
+  --color-severity-info-on: var(--severity-info-on);
+  /* Badges 4px, controls 6px, surfaces 8px. Larger radii are not used. */
+  --radius-*: initial;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: var(--radius);
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  button,
+  a,
+  input,
+  select {
+    outline-color: var(--ring);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  ::selection {
+    background: var(--accent);
+  }
+}
+.sidebar-navigation {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color:
+    color-mix(in srgb, var(--sidebar-foreground) 50%, transparent) transparent;
+}
+/* Recharts chrome: recessive hairline grid and muted tick ink. */
+.recharts-cartesian-axis-tick-value {
+  font-size: 0.75rem;
+  fill: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.recharts-cartesian-grid line {
+  stroke: var(--chart-grid);
+}
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+.recharts-tooltip-cursor {
+  stroke: var(--chart-axis);
+  stroke-dasharray: none;
+}
+.number {
+  font-variant-numeric: tabular-nums;
+}
+/* Large standalone figures use proportional numerals so digits sit naturally. */
+.figure {
+  font-variant-numeric: proportional-nums;
+  letter-spacing: -0.03em;
+}
+/* Rows that arrived in the latest live poll settle from a primary tint to the row background. */
+.live-row-new {
+  animation: live-row-enter 2.4s ease-out;
+}
+@keyframes live-row-enter {
+  from {
+    background-color: color-mix(in srgb, var(--primary) 12%, white);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+/* Session timeline: a hairline with category markers and matching labels. */
+.timeline {
+  position: relative;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 14px;
+  bottom: 14px;
+  width: 1px;
+  background: var(--border);
+}
+.timeline-item {
+  position: relative;
+  padding: 8px 0 8px 20px;
+}
+.timeline-item + .timeline-item {
+  border-top: 1px solid var(--border);
+}
+.timeline-dot {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 2px var(--card);
+}
+/* Category filters share the solid label fill and white text. An outline
+   and check mark distinguish selected categories. */
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  border: 1px solid var(--activity-color);
+  border-radius: 6px;
+  background: var(--activity-color);
+  padding: 0 8px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--primary-foreground);
+}
+.legend-chip:hover {
+  outline: 1px solid var(--activity-color);
+  outline-offset: 1px;
+}
+.legend-chip:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.legend-chip-on,
+.legend-chip-on:hover {
+  outline: 2px solid var(--activity-color);
+  outline-offset: 2px;
+}
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-row-new,
+  .live-dot {
+    animation: none;
+  }
+}
+.fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0.5;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fade-in {
+    animation: none;
+  }
+}
+
+/* Overview uses the same flow nodes and geometry as Live Guardrail. */
+.overview-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.overview-activity { min-width: 0; }
+.summary-citation { border-radius: 3px; background: var(--accent); color: var(--primary); padding: 0 4px; font-size: 11px; line-height: 16px; }
+.summary-citation-more { background: var(--muted); color: var(--muted-foreground); }
+.summary-citation:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (min-width: 1200px) and (min-height: 700px) {
+  main[data-overview] { padding-top: 12px; padding-bottom: 12px; }
+  main[data-overview] > div:first-child { margin-bottom: 10px; }
+  main[data-overview] > div:first-child > div:first-child { display: flex; align-items: center; gap: 16px; }
+  main[data-overview] > div:first-child p { margin: 0; }
+  .overview-summary .summary-points { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (min-width: 1440px) and (min-height: 850px) {
+  .overview-summary .summary-points .summary-text { font-size: var(--text-sm); line-height: var(--text-sm--line-height); }
+}

@@ -1,0 +1,134 @@
+{
+  "name": "OpenSecura dashboard palette",
+  "mode": "light",
+  "status": "approved",
+  "brandSource": "brand/brand.py at f9e452a679a3e68f2fba518338c491143c971e6d",
+  "brand": {
+    "navy": "#17376F",
+    "red": "#872420",
+    "teal": "#03707C",
+    "plum": "#814B86",
+    "green": "#3C723D",
+    "orange": "#964D09",
+    "gold": "#805C09",
+    "ink": "#1C2230",
+    "slate": "#5A6372",
+    "line": "#D5DAE2",
+    "paper": "#F5F6F8",
+    "deepNavy": "#0F2244"
+  },
+  "foundations": {
+    "background": "#F5F6F8",
+    "surface": "#FFFFFF",
+    "text": "#1C2230",
+    "secondaryText": "#5A6372",
+    "border": "#E4E7EC",
+    "mutedSurface": "#F0F2F5",
+    "controlBorder": "#838A95",
+    "sidebar": "#0F2244",
+    "sidebarText": "#D5E0F2",
+    "primary": "#17376F",
+    "primaryText": "#FFFFFF",
+    "selection": "#ECEFF3",
+    "focus": "#17376F"
+  },
+  "charts": {
+    "primary": "#03707C",
+    "secondary": "#A67FA9",
+    "tertiary": "#3B4351",
+    "areaOpacity": 0.08,
+    "areaOnWhite": "#EBF4F5",
+    "track": "#F0F2F5",
+    "grid": "#E4E7EC",
+    "axisText": "#5A6372",
+    "names": [
+      "Teal",
+      "Light plum",
+      "Dark slate"
+    ],
+    "provenance": [
+      "Exact brand Teal",
+      "Brand Plum at 71% over white",
+      "Equal sRGB mix of brand Slate and Ink, rounded"
+    ],
+    "assignment": {
+      "logs": "primary",
+      "metrics": "secondary",
+      "traces": "tertiary"
+    }
+  },
+  "severity": {
+    "critical": {
+      "mark": "#8B2B27",
+      "text": "#872420",
+      "source": "Brand Red at 97% over white",
+      "tint": "#F1E6E5",
+      "onMark": "#FFFFFF"
+    },
+    "high": {
+      "mark": "#B56220",
+      "text": "#964D09",
+      "source": "Orange variant tuned for severity separation",
+      "tint": "#F6ECE4",
+      "onMark": "#000000"
+    },
+    "medium": {
+      "mark": "#D5A12E",
+      "text": "#805C09",
+      "source": "Gold variant tuned for severity separation",
+      "tint": "#FAF4E6",
+      "onMark": "#000000"
+    },
+    "low": {
+      "mark": "#58758A",
+      "text": "#3D586D",
+      "source": "Slate and Navy family, muted for low severity",
+      "tint": "#EBEEF1",
+      "onMark": "#FFFFFF"
+    },
+    "info": {
+      "mark": "#9EA7B3",
+      "text": "#5A6372",
+      "source": "Lighter Slate variant",
+      "tint": "#F3F4F6",
+      "onMark": "#000000"
+    }
+  },
+  "statusColors": {
+    "healthy": "#3C723D",
+    "warning": "#805C09",
+    "error": "#872420",
+    "information": "#17376F",
+    "unknown": "#5A6372"
+  },
+  "rules": [
+    "Use navy for actions and selection, deep navy for navigation, teal for ordinary data.",
+    "Use a single teal hue for counts, trends, category magnitudes, and coverage.",
+    "Use additional series colors only for distinct named datasets, with matching dash or marker keys.",
+    "Use severity colors only for severity, with words or C/H/M/L/I labels.",
+    "Use separate status tokens for state, even when the hue is shared with the brand.",
+    "Use severity text steps on 12% tints; never use gold or gray marks as small text.",
+    "Use 8% chart areas and neutral empty tracks. Keep card backgrounds neutral.",
+    "Use Slate for chart labels. Keep pale borders decorative and use controlBorder for control boundaries.",
+    "Avoid using color as the only way to identify a series, severity, or state."
+  ],
+  "reasoningEffort": {
+    "none": "#FFAD5C",
+    "minimal": "#FF7A00",
+    "low": "#F54700",
+    "medium": "#CF1400",
+    "high": "#A80000",
+    "xhigh": "#820000",
+    "max": "#5C0000",
+    "ultra": "#360000",
+    "unknown": "#5A6372"
+  },
+  "activity": {
+    "prompt": "#345E87",
+    "tool": "#66558F",
+    "result": "#2F6B63",
+    "response": "#3D528F",
+    "decision": "#7B6041",
+    "session": "#5B6472"
+  }
+}

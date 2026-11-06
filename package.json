@@ -1,0 +1,14 @@
+{
+  "name": "openaidr-web",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "type": "module",
+  "scripts": {
+    "dev:dashboard": "pnpm --filter openaidr-dashboard dev",
+    "build:dashboard": "pnpm --filter openaidr-dashboard build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

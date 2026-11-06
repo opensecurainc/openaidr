@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>OpenAIDR downloads | OpenSecura</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; line-height: 1.6; }
+    main { max-width: 54rem; margin: 4rem auto; padding: 0 1.25rem; }
+    h1 { line-height: 1.2; }
+    a { color: light-dark(#1455a0, #8fc5ff); }
+    ul { list-style: none; padding: 0; display: grid; gap: 1rem; }
+    li { border: 1px solid #888; border-radius: .5rem; padding: 1rem; }
+    li a { font-weight: 600; }
+    code, pre { overflow-wrap: anywhere; white-space: pre-wrap; font-size: .85rem; }
+    small { display: block; margin-top: .5rem; }
+    #notes { line-height: 1.7; }
+  </style>
+</head>
+<body>
+<main>
+  <p>OpenSecura</p>
+  <h1>Download OpenAIDR</h1>
+  <p id="status" role="status">Loading the latest release...</p>
+  <noscript>Enable JavaScript to load the current installer links from the release JSON.</noscript>
+  <section id="release" hidden>
+    <h2 id="version"></h2>
+    <p>Choose the installer for your computer. Manual downloads are available to everyone.
+      Automatic updates follow the release schedule on supported app versions.</p>
+    <ul id="downloads"></ul>
+    <p><a id="notes-link">Download release notes</a> · <a href="/openaidr/rollout-v1.json">Release JSON</a></p>
+    <h2>Release notes</h2>
+    <pre id="notes"></pre>
+  </section>
+</main>
+<script>
+  async function loadRelease() {
+    const response = await fetch('/openaidr/rollout-v1.json', {cache: 'no-cache', redirect: 'error'});
+    if (!response.ok) throw new Error('Release unavailable');
+    const release = await response.json();
+    if (!/^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}\+[a-f0-9]{7,40}$/.test(release.version)
+        || typeof release.notes !== 'string') throw new Error('Invalid release');
+    const prefix = `https://releases.opensecura.ai/openaidr/${release.version}/`;
+    const labels = {
+      'darwin-aarch64': 'macOS · Apple Silicon (DMG)',
+      'darwin-x86_64': 'macOS · Intel (DMG)',
+      'windows-x86_64': 'Windows · x64 (ZIP)',
+      'linux-x86_64': 'Linux · x64 (DEB)',
+      'linux-x86_64-appimage': 'Linux · x64 (AppImage)'
+    };
+    const items = document.createDocumentFragment();
+    for (const [target, label] of Object.entries(labels)) {
+      const file = release.downloads[target];
+      if (!file && target === 'linux-x86_64-appimage') continue;
+      const url = new URL(file.url);
+      if (!url.href.startsWith(prefix) || url.search || url.hash
+          || !/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.size) || file.size <= 0) {
+        throw new Error('Invalid download');
+      }
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = url.href;
+      link.textContent = label;
+      if (target === 'linux-x86_64-appimage' && file.updater_protocol === 1) {
+        link.textContent = 'Linux · x64 (AppImage with automatic updates)';
+      }
+      const checksum = document.createElement('small');
+      checksum.textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · SHA-256: `;
+      const code = document.createElement('code');
+      code.textContent = file.sha256;
+      checksum.append(code);
+      item.append(link, checksum);
+      if (target === 'linux-x86_64-appimage') {
+        const filename = `OpenAIDR_${release.version}_amd64.AppImage`;
+        if (url.href !== prefix + 'linux/' + filename) throw new Error('Invalid AppImage download');
+        const verification = document.createElement('small');
+        verification.append('Also download: ');
+        for (const name of [filename + '.sig', 'appimage.json', 'appimage.json.sig']) {
+          const signature = document.createElement('a');
+          signature.href = prefix + 'linux/' + name;
+          signature.download = name;
+          signature.textContent = name === filename + '.sig' ? 'AppImage signature' : name;
+          if (verification.childNodes.length > 1) verification.append(' · ');
+          verification.append(signature);
+        }
+        item.append(verification);
+        if (file.updater_protocol === 1) {
+        const instruction = document.createElement('p');
+        instruction.textContent = 'Quit OpenAIDR. Save all four files in one folder, then run these commands there. '
+          + 'Open OpenAIDR from your application menu after installation. Existing enrollment and settings are kept; '
+          + 'an installed DEB remains available for manual or IT-managed use.';
+        const command = document.createElement('pre');
+        command.textContent = `chmod +x '${filename}'\nAPPIMAGE_EXTRACT_AND_RUN=1 './${filename}' --install-updates`;
+        item.append(instruction, command);
+        }
+      }
+      items.append(item);
+    }
+    document.getElementById('downloads').replaceChildren(items);
+    document.getElementById('version').textContent = `Version ${release.version}`;
+    document.getElementById('notes').textContent = release.notes;
+    document.getElementById('notes-link').href = prefix + 'release-notes.md';
+    document.getElementById('status').textContent = '';
+    document.getElementById('release').hidden = false;
+  }
+  loadRelease().catch(() => {
+    document.getElementById('status').textContent = 'Downloads are temporarily unavailable. Please reload this page to try again.';
+  });
+</script>
+</body>
+</html>

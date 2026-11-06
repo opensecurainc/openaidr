@@ -1,0 +1,34 @@
+import type { SVGProps } from "react";
+
+type P = SVGProps<SVGSVGElement>;
+const base = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+
+export const IconGrid = (p: P) => <svg {...base} {...p}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>;
+export const IconCpu = (p: P) => <svg {...base} {...p}><rect x="5" y="5" width="14" height="14" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" /></svg>;
+export const IconList = (p: P) => <svg {...base} {...p}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>;
+export const IconAlert = (p: P) => <svg {...base} {...p}><path d="M12 3l10 18H2L12 3z" /><path d="M12 10v4M12 17.5h.01" /></svg>;
+export const IconShield = (p: P) => <svg {...base} {...p}><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" /></svg>;
+export const IconUsers = (p: P) => <svg {...base} {...p}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" /><circle cx="17" cy="9" r="2.5" /><path d="M16 14.5c3 0 5.5 2 5.5 5" /></svg>;
+export const IconSensor = (p: P) => <svg {...base} {...p}><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>;
+export const IconServer = (p: P) => <svg {...base} {...p}><rect x="3" y="4" width="18" height="6" rx="1.5" /><rect x="3" y="14" width="18" height="6" rx="1.5" /><path d="M7 7h.01M7 17h.01" /></svg>;
+export const IconSearch = (p: P) => <svg {...base} {...p}><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>;
+export const IconMenu = (p: P) => <svg {...base} {...p}><path d="M4 7h16M4 12h16M4 17h16" /></svg>;
+export const IconX = (p: P) => <svg {...base} {...p}><path d="M6 6l12 12M18 6L6 18" /></svg>;
+export const IconCheck = (p: P) => <svg {...base} {...p}><path d="M5 12l5 5L20 7" /></svg>;
+export const IconCopy = (p: P) => <svg {...base} {...p}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>;
+export const IconChevronDown = (p: P) => <svg {...base} {...p}><path d="M6 9l6 6 6-6" /></svg>;
+export const IconChevronRight = (p: P) => <svg {...base} {...p}><path d="M9 6l6 6-6 6" /></svg>;
+export const IconArrowUp = (p: P) => <svg {...base} {...p}><path d="M12 19V5M5 12l7-7 7 7" /></svg>;
+export const IconArrowDown = (p: P) => <svg {...base} {...p}><path d="M12 5v14M5 12l7 7 7-7" /></svg>;
+export const IconSun = (p: P) => <svg {...base} {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>;
+export const IconMoon = (p: P) => <svg {...base} {...p}><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>;
+export const IconMonitor = (p: P) => <svg {...base} {...p}><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8" /></svg>;
+export const IconLogout = (p: P) => <svg {...base} {...p}><path d="M10 17l5-5-5-5M15 12H3M13 4h6v16h-6" /></svg>;
+export const IconPlus = (p: P) => <svg {...base} {...p}><path d="M12 5v14M5 12h14" /></svg>;
+export const IconTrash = (p: P) => <svg {...base} {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>;
+export const IconBuilding = (p: P) => <svg {...base} {...p}><rect x="4" y="3" width="16" height="18" rx="1.5" /><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M10 21v-3h4v3" /></svg>;
+export const IconKey = (p: P) => <svg {...base} {...p}><circle cx="8" cy="14" r="4" /><path d="M11 11l9-9M16 6l2 2M13 9l2 2" /></svg>;
+export const IconActivity = (p: P) => <svg {...base} {...p}><path d="M3 12h4l3-8 4 16 3-8h4" /></svg>;
+export const IconRefresh = (p: P) => <svg {...base} {...p}><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" /></svg>;
+export const IconTable = (p: P) => <svg {...base} {...p}><rect x="3" y="5" width="18" height="14" rx="1.5" /><path d="M3 10h18M3 15h18M9 5v14" /></svg>;
+export const IconChart = (p: P) => <svg {...base} {...p}><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" /></svg>;

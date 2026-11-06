@@ -1,0 +1,54 @@
+name: Backend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build backend and dashboard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+      - name: Build Docker images
+        run: |
+          python scripts/local_stack.py configure
+          docker compose -p openaidr build server dashboard
+          docker run --rm openaidr-local-server version
+      - name: Export Docker images
+        run: |
+          mkdir -p build/backend
+          python scripts/build_version.py > build/backend/build.json
+          docker image save openaidr-local-server:latest openaidr-dashboard:latest \
+            | gzip > build/backend/openaidr-backend.tar.gz
+      - name: Publish backend prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="$(jq -er '.version' build/backend/build.json)"
+          printf '%s\n' \
+            'Linux x64 backend and dashboard Docker images.' \
+            '' \
+            "Source commit: $GITHUB_SHA" \
+            '' \
+            "Installation: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/guide.md#manual-github-builds" \
+            > "$RUNNER_TEMP/backend-release-notes.md"
+          gh release create "$version" \
+            build/backend/openaidr-backend.tar.gz build/backend/build.json \
+            --target "$GITHUB_SHA" \
+            --title "OpenAIDR $version" \
+            --prerelease --latest=false \
+            --notes-file "$RUNNER_TEMP/backend-release-notes.md"

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=77", "wheel", "tzdata; sys_platform == 'win32'"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openaidr-common"
+dynamic = ["version"]
+description = "Shared OpenAIDR vocabulary, pattern compilation, and credential redaction"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6,<7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["openaidr_common*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+openaidr_common = ["_build.json", "secret-redaction.yaml", "secret-redaction.LICENSE"]

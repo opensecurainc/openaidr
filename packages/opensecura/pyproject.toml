@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opensecura"
+version = "0.0.2"
+description = "OpenSecura namespace package: AI agent security tooling, including OpenAIDR. Name reserved ahead of the first release."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [{name = "OpenSecura", email = "contact@opensecura.ai"}]
+keywords = ["ai-agents", "guardrails", "security", "opensecura", "openaidr"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://opensecura.ai/"
+Repository = "https://github.com/opensecurainc/openaidr"
+Issues = "https://github.com/opensecurainc/openaidr/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

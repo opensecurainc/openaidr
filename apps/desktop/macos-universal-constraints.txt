@@ -1,0 +1,10 @@
+# pip constraints for universal (Apple Silicon and Intel) macOS builds only.
+# Install with: python -m pip install -c apps/desktop/macos-universal-constraints.txt -e '.[desktop]'
+#
+# cryptography 49.0.0 removed x86_64 macOS support and publishes only arm64
+# wheels. 48.0.1 is the last release with universal2 wheels (OpenSSL 4.0.1).
+# It lacks the 50.0.0 fix for CVE-2026-69247, which affects PKCS#7 decryption
+# that the sensor does not use, and the OpenSSL 4.0.2 and 4.0.3 wheel updates.
+# Remove this pin when the universal build compiles cryptography for x86_64
+# or Intel Mac support ends.
+cryptography==48.0.1

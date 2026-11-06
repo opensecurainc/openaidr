@@ -1,0 +1,132 @@
+/* OpenSecura brand tokens. Source of truth: brand repository, brand.py. */
+@import "./fonts/geist.css";
+
+:root {
+  /* Primary */
+  --navy: #17376f;
+  --red: #872420;
+  /* Harmonies */
+  --gold: #805c09;
+  --teal: #03707c;
+  --green: #3c723d;
+  --plum: #814b86;
+  --orange: #964d09;
+  /* Interface */
+  --ink: #1c2230;
+  --slate: #5a6372;
+  --line: #d5dae2;
+  --paper: #f5f6f8;
+  --deep-navy: #0f2244;
+  --white: #ffffff;
+
+  /* Semantic */
+  --bg: var(--paper);
+  --surface: var(--white);
+  --surface-2: #eceff3;
+  --text: var(--ink);
+  --text-muted: var(--slate);
+  --border: var(--line);
+  --accent: var(--navy);
+  --accent-contrast: var(--white);
+  --danger: var(--red);
+  --warning: var(--orange);
+  --success: var(--green);
+  --info: var(--teal);
+  --focus: #4c88d3;
+
+  /* Severity */
+  --sev-critical: var(--red);
+  --sev-high: var(--orange);
+  --sev-medium: var(--gold);
+  --sev-low: var(--teal);
+  --sev-info: var(--slate);
+
+  /* Categorical (charts). Brand hues re-stepped in OKLCH to pass the
+     dataviz palette validator (lightness band, chroma floor, CVD and
+     normal-vision separation). Fixed order, never cycled. Slots 3 and 5
+     sit under 3:1 on white, so charts always offer a table view. */
+  --cat-1: #5a88d7;
+  --cat-2: #7d5903;
+  --cat-3: #18afc0;
+  --cat-4: #a3433b;
+  --cat-5: #6bb66c;
+  --cat-6: #77377d;
+  --cat-7: #cb7738;
+  --chart-grid: #e6e9ee;
+  --chart-muted: #b9c1cd;
+
+  --font: "Geist Sans", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow: 0 1px 2px rgba(15, 34, 68, 0.06), 0 1px 3px rgba(15, 34, 68, 0.1);
+  --sidebar-w: 232px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1730;
+    --surface: #12213f;
+    --surface-2: #1a2b4d;
+    --text: #e6eaf1;
+    --text-muted: #9aa6b8;
+    --border: #27395c;
+    --accent: #6f9be6;
+    --accent-contrast: #0b1730;
+    --focus: #8fb4f0;
+    --sev-critical: #e0736d;
+    --sev-high: #e39a55;
+    --sev-medium: #d3aa3a;
+    --sev-low: #4fb3bf;
+    --sev-info: #9aa6b8;
+    --cat-1: #5d8bdb;
+    --cat-2: #886107;
+    --cat-3: #009eaf;
+    --cat-4: #a7463e;
+    --cat-5: #56a057;
+    --cat-6: #86468c;
+    --cat-7: #c77435;
+    --chart-grid: #22355a;
+    --chart-muted: #4a5f85;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1730;
+  --surface: #12213f;
+  --surface-2: #1a2b4d;
+  --text: #e6eaf1;
+  --text-muted: #9aa6b8;
+  --border: #27395c;
+  --accent: #6f9be6;
+  --accent-contrast: #0b1730;
+  --focus: #8fb4f0;
+  --sev-critical: #e0736d;
+  --sev-high: #e39a55;
+  --sev-medium: #d3aa3a;
+  --sev-low: #4fb3bf;
+  --sev-info: #9aa6b8;
+  --cat-1: #5d8bdb;
+  --cat-2: #886107;
+  --cat-3: #009eaf;
+  --cat-4: #a7463e;
+  --cat-5: #56a057;
+  --cat-6: #86468c;
+  --cat-7: #c77435;
+  --chart-grid: #22355a;
+  --chart-muted: #4a5f85;
+}
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
