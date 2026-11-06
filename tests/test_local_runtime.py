@@ -292,19 +292,23 @@ def test_docker_start_timeout_is_retryable_and_does_not_create_runtime(local, mo
 
 
 @pytest.mark.parametrize("extracted", [False, True])
-def test_publication_cleanup_preserves_previous_runtime_identity_and_data(local, monkeypatch, extracted):
+@pytest.mark.parametrize("previous", [
+    "4d52ae0063d7af8ec18267041f6fd66866d03d5b",
+    "cb7471e3bf24b75451b4e89e7a0b78295d33bd7a",
+    "ade7e73ea7b5661f41598e3026688ed5cb4ab60b",
+])
+def test_publication_cleanup_preserves_previous_runtime_identity_and_data(local, monkeypatch, extracted, previous):
     config, fixture = local
-    fixture["call"]("prepare")
+    with monkeypatch.context() as installed:
+        installed.setattr(runtime, "SOURCE", previous)
+        installed.setattr(runtime, "SOURCE_TIME", "1793926234")
+        fixture["call"]("prepare")
     root = runtime.directory(config)
     before = json.loads((root / "state.json").read_text())
-    previous = runtime.SOURCE
     marker = root / "source" / "retained-data-marker"
     marker.write_text("keep existing source")
     if not extracted:
         shutil.rmtree(root / "source")
-    monkeypatch.setattr(runtime, "SOURCE", "new-reviewed-source")
-    monkeypatch.setattr(runtime, "COMPATIBLE_SOURCES", (previous,))
-    monkeypatch.setattr(runtime, "SOURCE_TIME", "1800000000")
     fixture["call"]("prepare")
     saved = runtime.state(config)
     assert saved["env"]["POSTGRES_PASSWORD"] == before["env"]["POSTGRES_PASSWORD"]
@@ -312,8 +316,8 @@ def test_publication_cleanup_preserves_previous_runtime_identity_and_data(local,
     if extracted:
         assert saved == before and marker.read_text() == "keep existing source"
     else:
-        assert saved["source"] == saved["env"]["OPENAIDR_BUILD_COMMIT"] == "new-reviewed-source"
-        assert saved["env"]["OPENAIDR_COMMIT_TIMESTAMP"] == "1800000000"
+        assert saved["source"] == saved["env"]["OPENAIDR_BUILD_COMMIT"] == runtime.SOURCE
+        assert saved["env"]["OPENAIDR_COMMIT_TIMESTAMP"] == runtime.SOURCE_TIME
     assert fixture["call"]("start")["running"]
 
 
