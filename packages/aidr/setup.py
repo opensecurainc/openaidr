@@ -50,7 +50,7 @@ if MANIFEST.is_file():
         "common": "packages/common/src/openaidr_common",
         "changes": "Absolute imports relocated under aidr._vendor.",
     }, indent=2).encode() + b"\n")
-elif not (VENDOR / "provenance.json").is_file():
+elif not (ROOT / "PKG-INFO").is_file() or not (VENDOR / "provenance.json").is_file():
     raise RuntimeError("Build aidr from the repository or its complete source distribution")
 
 

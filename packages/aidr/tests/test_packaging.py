@@ -6,10 +6,13 @@ import importlib.metadata
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
 import zipfile
+
+import pytest
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -21,9 +24,21 @@ def run(*args, cwd):
                           capture_output=True, text=True)
 
 
-def test_source_distribution_builds_independent_wheel_with_reused_sources(tmp_path):
+@pytest.fixture
+def clean_package(tmp_path):
+    repository = tmp_path / "repository"
+    package = repository / "packages/aidr"
+    ignore = shutil.ignore_patterns("_vendor", "build", "dist", "*.egg-info", "__pycache__", ".pytest_cache")
+    shutil.copytree(PACKAGE, package, ignore=ignore)
+    shutil.copytree(ROOT / "packages/common/src", repository / "packages/common/src", ignore=ignore)
+    shutil.copytree(ROOT / "dependencies/api-runtime", repository / "dependencies/api-runtime")
+    shutil.copyfile(ROOT / "LICENSE", repository / "LICENSE")
+    return package
+
+
+def test_source_distribution_builds_independent_wheel_with_reused_sources(tmp_path, clean_package):
     dist = tmp_path / "dist"
-    run("-m", "build", "--no-isolation", "--sdist", "--outdir", str(dist), str(PACKAGE), cwd=tmp_path)
+    run("-m", "build", "--no-isolation", "--sdist", "--outdir", str(dist), str(clean_package), cwd=tmp_path)
     with tarfile.open(next(dist.glob("*.tar.gz"))) as archive:
         archive.extractall(tmp_path / "source", filter="data")
     source = next((tmp_path / "source").iterdir())
@@ -73,6 +88,29 @@ assert redact_value({'password': 'example'}) == {'password': '[REDACTED]'}
 import pytest
 raise SystemExit(pytest.main(['-q', sys.argv[2]]))
 '''
-    tests = tmp_path / "test_installed.py"
-    tests.write_bytes((PACKAGE / "tests/test_client.py").read_bytes())
+    tests = tmp_path / "runtime_tests"
+    tests.mkdir()
+    for name in ("test_client.py", "test_credentials.py", "test_cli.py"):
+        (tests / name).write_bytes((PACKAGE / "tests" / name).read_bytes())
     run("-I", "-c", proof, str(installed), str(tests), cwd=tmp_path)
+
+
+@pytest.mark.parametrize("failure", ["missing_manifest", "modified_wheel"])
+def test_repository_build_rejects_invalid_dependencies_despite_cached_vendor(tmp_path, clean_package, failure):
+    vendor = clean_package / "src/aidr/_vendor"
+    vendor.mkdir()
+    (vendor / "provenance.json").write_text("{}")
+    manifest = clean_package.parents[1] / "dependencies/api-runtime/manifest.json"
+    if failure == "missing_manifest":
+        manifest.unlink()
+        expected = "Build aidr from the repository or its complete source distribution"
+    else:
+        sdk = json.loads(manifest.read_text())["wheels"]["sdk"]
+        wheel = manifest.parent / sdk["name"]
+        wheel.write_bytes(wheel.read_bytes() + b"modified")
+        expected = "The API client wheel does not match its reviewed checksum"
+    with pytest.raises(subprocess.CalledProcessError) as caught:
+        run("-m", "build", "--no-isolation", "--sdist", "--outdir", str(tmp_path / "dist"),
+            str(clean_package), cwd=tmp_path)
+    assert expected in caught.value.stderr
+    assert (vendor / "provenance.json").read_text() == "{}"

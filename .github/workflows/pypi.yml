@@ -67,6 +67,17 @@ jobs:
           python -m pip install --upgrade build twine
           python -m build --outdir dist "packages/$PACKAGE"
           python -m twine check dist/*
+      - name: Verify the aidr release
+        if: steps.select.outputs.package == 'aidr'
+        run: |
+          python scripts/verify_public_dependencies.py
+          python scripts/check_publication.py
+          python -m pip install --upgrade "setuptools>=77" wheel pytest dist/*.whl
+          python -I -m pytest -q packages/aidr/tests
+          python -m pip check
+          for artifact in dist/*; do
+            python scripts/check_publication.py "$artifact"
+          done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dist-${{ steps.select.outputs.package }}

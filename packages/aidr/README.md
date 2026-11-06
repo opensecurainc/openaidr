@@ -1,20 +1,70 @@
 # aidr
 
-Python SDK for the [OpenSecura](https://opensecura.ai/) API. Check npm and PyPI
-dependencies for known vulnerabilities and assess AI agent actions with guardrails.
-Detection and investigation methods are deferred.
+Command line and Python SDK for [OpenSecura](https://opensecura.ai/). Enroll for
+free, save credentials, check npm and PyPI dependencies for known vulnerabilities,
+and assess AI agent actions with guardrails. Detection and investigation methods
+are deferred.
 
-This checkout prepares version 0.1.0. Until it is published, PyPI still provides
-the 0.0.1 placeholder. Install this implementation from the repository root:
+Install from PyPI:
 
 ```sh
-python -m pip install ./packages/aidr
+python -m pip install aidr
 ```
 
-Python 3.11 or later is required. The SDK does not require the desktop app,
+Python 3.11 or later is required. The CLI and SDK do not require the desktop app,
 sensor, database, or local server.
 
-## Usage
+## Command line
+
+Start without an account or API key:
+
+```sh
+aidr enroll --free
+aidr status
+aidr scan --ecosystem npm --package lodash --version 4.17.20
+aidr scan --ecosystem pypi --package requests --version 2.31.0
+aidr guardrail --command 'git status'
+```
+
+Enrollment saves a local installation identity before contacting the service.
+Repeating `aidr enroll --free` recovers the same identity after an interrupted
+request. Commands use the saved credentials without an API key or tenant ID on
+the command line. The connected service controls the free allowance and available
+capabilities; scans and assessments can consume service credits.
+
+To use an API key, run `aidr login` and enter it at the hidden prompt. The CLI
+discovers the tenant and verifies the connection before saving it. Automation can
+pipe a key into `aidr login --api-key-stdin`. `aidr logout` removes the active
+connection while retaining the free installation identity for later recovery.
+Logout does not revoke an API key at the service.
+
+Credentials are stored separately from the desktop app. On macOS the default
+file is `~/Library/Application Support/aidr/credentials.json`; on Linux it is
+`$XDG_CONFIG_HOME/aidr/credentials.json` or `~/.config/aidr/credentials.json`.
+On Windows it is `%APPDATA%\aidr\credentials.json`.
+Use `aidr --config /path/to/credentials.json` before the subcommand to select
+another file. Credential files contain secrets and must not be shared or
+committed. On POSIX systems the directory and file are restricted to their owner.
+An existing directory selected with `--config` must also be private.
+
+`enroll` and `login` accept `--base-url` for an exact HTTPS origin and `--ca-file`
+for a PEM trust bundle. The saved origin is used by later commands. Credentials
+are never sent through redirects or environment-configured HTTP proxies.
+
+Scan one explicit package version per command. Guardrail commands assess the
+supplied command text without executing it or installing agent hooks:
+
+```sh
+aidr guardrail --command 'git status' --policy 'Do not expose secrets.' --timeout 5
+```
+
+Results are JSON on stdout. Each scan or guardrail call prints its request ID to
+stderr before sending the request. After an uncertain outcome, pass that ID with
+`--request-id` and the exact same inputs to retry. The CLI does not retry calls
+automatically. Request failures produce a nonzero exit code; successful advisory
+results are not an allow or deny decision. Use `aidr COMMAND --help` for options.
+
+## Python SDK
 
 Use an OpenSecura API key and its assigned tenant UUID. The tenant UUID is
 returned by `GET /v1/capabilities` for an assigned key. SDK construction does
@@ -126,7 +176,8 @@ wheel and `packages/common/src/openaidr_common`. Only absolute import paths are
 rewritten. HTTP transport, wire contracts, validation, and accounting remain the
 existing implementations. Generated files are ignored by Git and included in
 both the wheel and source distribution, with provenance and license files.
-Do not edit generated vendor files.
+Do not edit generated vendor files. Repository builds require the manifest;
+source distributions include the generated files and build independently.
 
 Private namespaces avoid collisions with installed OpenAIDR clients. Public PyPI
 dependencies are HTTPX, AnyIO, Pydantic, PyYAML, and tzdata on Windows. No private
@@ -140,4 +191,6 @@ python -m pytest -q packages/aidr/tests
 python -m build packages/aidr
 ```
 
-Tests use simulated HTTP responses. They do not consume service credits.
+Packaging tests build from a copy without generated files, rebuild the source
+distribution independently, and test the installed wheel. Tests use simulated
+HTTP responses. They do not consume service credits.
