@@ -8,7 +8,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/ca7f30f6-3cff-4458-adeb-a0650c571cd5
+https://github.com/user-attachments/assets/53053234-d06a-4563-a5d5-fd492f595db1
 
 *15-second product tour. All data shown is synthetic.*
 
