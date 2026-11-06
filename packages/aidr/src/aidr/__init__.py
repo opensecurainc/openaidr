@@ -7,11 +7,6 @@ __all__ = ["AIDR", "AsyncAIDR", "GuardrailError", "ScanError"]
 
 
 def main() -> int:
-    import argparse
+    from .cli import main as cli_main
 
-    parser = argparse.ArgumentParser(description="OpenSecura Python SDK for dependency scans and guardrails.")
-    parser.add_argument("--version", action="version", version=__version__)
-    parser.parse_args()
-    parser.print_help()
-    print("\nPython usage: from aidr import AIDR, AsyncAIDR")
-    return 0
+    return cli_main()
