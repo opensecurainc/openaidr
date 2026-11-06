@@ -9,7 +9,7 @@ import tarfile
 
 from check_publication import check_file
 
-SOURCE = "ade7e73ea7b5661f41598e3026688ed5cb4ab60b"
+SOURCE = "dfe6151f309ff0b170d41f00d69c2b17a6a753a9"
 ROOT_FILES = {"pyproject.toml", "setup.py", "MANIFEST.in", "README.md", "LICENSE", "compose.yaml",
               ".dockerignore", "package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"}
 PREFIXES = ("src/", "dependencies/api-runtime/", "packages/ui/", "apps/dashboard/",

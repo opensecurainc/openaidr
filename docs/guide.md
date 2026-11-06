@@ -429,16 +429,17 @@ services.
 ### Measured build times
 
 All builds passed on their first run on 2026-10-20 (UTC), using source commit
-[`29a54de`](https://github.com/opensecurainc/openaidr/commit/29a54de37fae0d4a8fde18b97f5e7358ea6b5805).
+[`29a54de`](https://github.com/opensecurainc/openaidr-private-archive-20261105/commit/29a54de37fae0d4a8fde18b97f5e7358ea6b5805).
+These historical records are kept in the private archive and require access.
 These measurements used fresh GitHub-hosted runners with no workflow caches.
 Full job time includes setup, build, export, and upload, but excludes queue time.
 
 | Build | Runner | Build step | Full job |
 | --- | --- | --- | --- |
-| [macOS ARM64](https://github.com/opensecurainc/openaidr/actions/runs/39376816428/job/118476715020) | `macos-15` | 2m 27s | 2m 51s |
-| [Windows x64](https://github.com/opensecurainc/openaidr/actions/runs/39376816428/job/118476714976) | `windows-2025` | 13m 17s | 14m 57s |
-| [Linux x64](https://github.com/opensecurainc/openaidr/actions/runs/39376816428/job/118476714773) | `ubuntu-22.04` | 8m 42s | 9m 50s |
-| [Backend and dashboard](https://github.com/opensecurainc/openaidr/actions/runs/39376819447/job/118476715740) | `ubuntu-24.04` | 55s | 1m 24s |
+| [macOS ARM64](https://github.com/opensecurainc/openaidr-private-archive-20261105/actions/runs/39376816428/job/118476715020) | `macos-15` | 2m 27s | 2m 51s |
+| [Windows x64](https://github.com/opensecurainc/openaidr-private-archive-20261105/actions/runs/39376816428/job/118476714976) | `windows-2025` | 13m 17s | 14m 57s |
+| [Linux x64](https://github.com/opensecurainc/openaidr-private-archive-20261105/actions/runs/39376816428/job/118476714773) | `ubuntu-22.04` | 8m 42s | 9m 50s |
+| [Backend and dashboard](https://github.com/opensecurainc/openaidr-private-archive-20261105/actions/runs/39376819447/job/118476715740) | `ubuntu-24.04` | 55s | 1m 24s |
 
 The three App jobs run in parallel. Dispatch to final job completion took
 **15m 03s** for App and **1m 28s** for Backend, including queue time.

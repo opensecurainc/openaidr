@@ -20,14 +20,15 @@ from .docker_setup import environment
 from .config import configuration_lock
 
 ORIGIN = "http://localhost:8080"
-SOURCE = "ade7e73ea7b5661f41598e3026688ed5cb4ab60b"
-SOURCE_TIME = "1793926234"
+SOURCE = "dfe6151f309ff0b170d41f00d69c2b17a6a753a9"
+SOURCE_TIME = "1793931007"
 COMPATIBLE_SOURCES = (
     "4d52ae0063d7af8ec18267041f6fd66866d03d5b",
     "cb7471e3bf24b75451b4e89e7a0b78295d33bd7a",
+    "ade7e73ea7b5661f41598e3026688ed5cb4ab60b",
 )
 ARCHIVE = Path(__file__).with_name("local_runtime_source.tar.gz")
-ARCHIVE_SHA256 = "3a15376ed53682c1c5aa4727a49eaec14260764d579fafe8789eb3ac8f68c996"
+ARCHIVE_SHA256 = "624e9b19ca89ec059380afc45d95e41c3f447bf812195b9130d311427cbf8192"
 
 
 def directory(config):
