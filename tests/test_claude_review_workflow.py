@@ -1,10 +1,50 @@
-"""Exercise the review workflow's executable setup without network or credentials."""
+"""Exercise the review workflow's setup without network or credentials."""
 import os
 from pathlib import Path
 import subprocess
 
 import pytest
 import yaml
+
+
+@pytest.mark.skipif(os.name == "nt", reason="The review runs on an Ubuntu runner")
+@pytest.mark.parametrize("token", [None, "", "synthetic-review-token"])
+def test_claude_authentication_preflight(token):
+    workflow = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / ".github/workflows/claude-review.yml").read_text()
+    )
+    steps = workflow["jobs"]["review"]["steps"]
+    step = steps[0]
+    assert step.get("id") == "claude-auth"
+    review = next(step for step in steps if step.get("id") == "review")
+    assert step["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == review["with"]["claude_code_oauth_token"]
+    env = {key: value for key, value in os.environ.items() if key != "CLAUDE_CODE_OAUTH_TOKEN"}
+    if token is not None:
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = token
+    result = subprocess.run(
+        ["bash", "-e", "-o", "pipefail", "-c", step["run"]],
+        env=env, capture_output=True, text=True,
+    )
+    if token:
+        assert result.returncode == 0, result.stderr
+        assert not result.stdout
+        assert not result.stderr
+    else:
+        assert result.returncode == 1
+        assert "::error::" in result.stdout
+        assert "CLAUDE_CODE_OAUTH_TOKEN" in result.stdout
+        assert "claude setup-token" in result.stdout
+
+
+def test_claude_cache_only_restores():
+    workflow = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / ".github/workflows/claude-review.yml").read_text()
+    )
+    cache_actions = [
+        step["uses"].split("@")[0] for step in workflow["jobs"]["review"]["steps"]
+        if step.get("uses", "").startswith("actions/cache")
+    ]
+    assert cache_actions == ["actions/cache/restore"]
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The review runs on an Ubuntu runner")

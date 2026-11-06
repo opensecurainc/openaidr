@@ -31,6 +31,16 @@ jobs:
       issues: write
       actions: read
     steps:
+      - name: Check Claude authentication
+        id: claude-auth
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+            echo '::error::Missing CLAUDE_CODE_OAUTH_TOKEN repository secret. Generate a token with claude setup-token and add it in Settings > Secrets and variables > Actions.'
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -38,8 +48,8 @@ jobs:
           # Claude fetches the PR branch after checkout.
           persist-credentials: true
 
+      # issue_comment runs have read-only cache access. Install on a cache miss.
       - name: Restore Claude Code installation
-        id: claude-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/claude-code
@@ -54,13 +64,6 @@ jobs:
             npm install --global --prefix "$CLAUDE_CODE_PREFIX" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
           fi
           "$CLAUDE_CODE_PREFIX/bin/claude" --version
-
-      - name: Save Claude Code installation
-        if: steps.claude-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/claude-code
-          key: ${{ steps.claude-cache.outputs.cache-primary-key }}
 
       - name: Review pull request
         id: review
