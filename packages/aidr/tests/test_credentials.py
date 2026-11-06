@@ -372,3 +372,123 @@ def test_failed_atomic_save_keeps_active_credentials(tmp_path, monkeypatch):
     assert path.read_bytes() == before
     assert "private filesystem detail" not in str(caught.value)
     assert sorted(file.name for file in tmp_path.iterdir()) == ["credentials.json", "credentials.json.lock"]
+
+
+def test_credential_reads_succeed_while_mutation_lock_is_held(tmp_path):
+    path = tmp_path / "credentials.json"
+    transport = free_service(path, [])
+    enrolled = credentials.enroll_free(path, transport=transport)
+    before = path.read_bytes()
+    with credentials._locked(path):
+        assert credentials.load_connection(path).tenant_id == enrolled["tenant_id"]
+        assert credentials.status(path, transport=transport) == enrolled
+    assert path.read_bytes() == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX read-only credential store")
+@pytest.mark.parametrize("lock_exists", [False, True])
+def test_credential_reads_do_not_require_writable_store(tmp_path, lock_exists):
+    path = tmp_path / "aidr/credentials.json"
+    transport = free_service(path, [])
+    enrolled = credentials.enroll_free(path, transport=transport)
+    lock = path.with_name(path.name + ".lock")
+    if lock_exists:
+        lock.chmod(0o400)
+    else:
+        lock.unlink()
+    path.chmod(0o400)
+    path.parent.chmod(0o500)
+    before = sorted(entry.name for entry in path.parent.iterdir())
+    try:
+        assert credentials.load_connection(path).tenant_id == enrolled["tenant_id"]
+        assert credentials.status(path, transport=transport) == enrolled
+        assert sorted(entry.name for entry in path.parent.iterdir()) == before
+    finally:
+        path.parent.chmod(0o700)
+        path.chmod(0o600)
+        if lock_exists:
+            lock.chmod(0o600)
+
+
+def test_status_network_request_does_not_block_credential_reads(tmp_path):
+    path = tmp_path / "credentials.json"
+    base = free_service(path, [])
+    enrolled = credentials.enroll_free(path, transport=base)
+    started, release = threading.Event(), threading.Event()
+
+    def service(request):
+        started.set()
+        assert release.wait(5)
+        return base.handler(request)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(credentials.status, path, transport=httpx.MockTransport(service))
+        assert started.wait(5)
+        try:
+            assert credentials.load_connection(path).tenant_id == enrolled["tenant_id"]
+            with credentials._locked(path):
+                assert credentials.load_connection(path).tenant_id == enrolled["tenant_id"]
+        finally:
+            release.set()
+        assert pending.result() == enrolled
+
+
+@pytest.mark.parametrize("directory_exists", [False, True])
+def test_missing_credential_reads_do_not_create_directories_or_lock_files(tmp_path, directory_exists):
+    path = tmp_path / "aidr/credentials.json"
+    if directory_exists:
+        path.parent.mkdir(mode=0o700)
+    before = sorted(tmp_path.rglob("*"))
+    assert credentials.status(path, transport=httpx.MockTransport(lambda _: pytest.fail("Unexpected request"))) == {
+        "authenticated": False, "free_identity_retained": False}
+    with pytest.raises(credentials.CredentialError, match="No active credentials"):
+        credentials.load_connection(path)
+    assert sorted(tmp_path.rglob("*")) == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX replacement of an open file")
+def test_atomic_replacement_during_read_preserves_open_snapshot(tmp_path, monkeypatch):
+    path = tmp_path / "credentials.json"
+    credentials.login(path, TOKEN, transport=httpx.MockTransport(lambda _: httpx.Response(200, json=capabilities(TENANT))))
+    replacement = saved(path)
+    replacement["active"]["tenant_id"] = str(uuid4())
+    open_file = credentials.os.open
+    replaced = False
+
+    def replace_after_open(file, flags, *args, **kwargs):
+        nonlocal replaced
+        fd = open_file(file, flags, *args, **kwargs)
+        if Path(file) == path and not replaced:
+            replaced = True
+            with credentials._locked(path):
+                credentials._write(path, replacement)
+        return fd
+
+    monkeypatch.setattr(credentials.os, "open", replace_after_open)
+    assert credentials.load_connection(path).tenant_id == TENANT
+    assert credentials.load_connection(path).tenant_id == replacement["active"]["tenant_id"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permissions and symbolic links")
+@pytest.mark.parametrize("target", ["file_link", "directory_link", "directory_permissions", "file_permissions", "hardlink"])
+def test_credential_snapshots_reject_unsafe_storage(tmp_path, target):
+    path = tmp_path / "aidr/credentials.json"
+    credentials.login(path, TOKEN, transport=httpx.MockTransport(lambda _: httpx.Response(200, json=capabilities(TENANT))))
+    if target == "file_link":
+        real = path.with_name("real.json")
+        path.rename(real)
+        path.symlink_to(real)
+    elif target == "directory_link":
+        linked = tmp_path / "linked"
+        linked.symlink_to(path.parent, target_is_directory=True)
+        path = linked / path.name
+    elif target == "directory_permissions":
+        path.parent.chmod(0o755)
+    elif target == "file_permissions":
+        path.chmod(0o644)
+    else:
+        os.link(path, path.with_name("linked.json"))
+    with pytest.raises(credentials.CredentialError):
+        credentials.load_connection(path)
+    with pytest.raises(credentials.CredentialError):
+        credentials.status(path, transport=httpx.MockTransport(lambda _: pytest.fail("Unexpected request")))

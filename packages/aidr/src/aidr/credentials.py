@@ -36,9 +36,10 @@ def default_path() -> Path:
     return root / "aidr/credentials.json"
 
 
-def _private(info, *, directory=False):
+def _private(info, *, directory=False, allow_unlinked=False):
     kind = stat.S_ISDIR if directory else stat.S_ISREG
-    if not kind(info.st_mode) or (not directory and info.st_nlink != 1):
+    links = (0, 1) if allow_unlinked else (1,)
+    if not kind(info.st_mode) or (not directory and info.st_nlink not in links):
         raise CredentialError("Credentials require regular files in a private directory.")
     if os.name != "nt" and (info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077):
         raise CredentialError("Credentials and their directory must be accessible only to their owner.")
@@ -120,12 +121,15 @@ def _unique_object(pairs):
 
 def _read(path):
     try:
+        if path.is_symlink() or path.parent.is_symlink():
+            raise CredentialError("Credential paths must not be symbolic links.")
+        _private(path.parent.stat(follow_symlinks=False), directory=True)
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     except FileNotFoundError:
         return {"version": 1, "free": None, "active": None, "pending_login": None}
     try:
         with os.fdopen(fd, "r", encoding="utf-8") as stream:
-            _private(os.fstat(stream.fileno()))
+            _private(os.fstat(stream.fileno()), allow_unlinked=True)
             text = stream.read(_LIMIT + 1)
         if len(text) > _LIMIT:
             raise ValueError
@@ -160,6 +164,14 @@ def _read(path):
         return value
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
         raise CredentialError("The saved credential state is invalid. It was not replaced.") from None
+
+
+def _snapshot(path):
+    """Read one atomically published version without blocking credential updates."""
+    try:
+        return _read(Path(path).expanduser().absolute())
+    except OSError:
+        raise CredentialError("Could not access the credential store.") from None
 
 
 def _write(path, value):
@@ -304,25 +316,23 @@ def login(path, api_key, *, base_url=ORIGIN, ca_file="", transport=None):
 
 
 def load_connection(path) -> Connection:
-    with _locked(path) as path:
-        active = _read(path)["active"]
-        if active is None:
-            raise CredentialError("No active credentials. Run aidr enroll --free or aidr login first.")
-        return _active_connection(active)
+    active = _snapshot(path)["active"]
+    if active is None:
+        raise CredentialError("No active credentials. Run aidr enroll --free or aidr login first.")
+    return _active_connection(active)
 
 
 def status(path, *, transport=None):
-    with _locked(path) as path:
-        value = _read(path)
-        active = value["active"]
-        if active is None:
-            return {"authenticated": False, "free_identity_retained": value["free"] is not None}
-        connection = _active_connection(active)
-        try:
-            verified = asyncio.run(_verify(connection, active["mode"], transport))
-        except (Unavailable, httpx.HTTPError, TimeoutError, ValueError, RecursionError):
-            raise CredentialError("Could not verify the saved connection. Credentials were not changed.") from None
-        return _result(connection, active["mode"], verified)
+    value = _snapshot(path)
+    active = value["active"]
+    if active is None:
+        return {"authenticated": False, "free_identity_retained": value["free"] is not None}
+    connection = _active_connection(active)
+    try:
+        verified = asyncio.run(_verify(connection, active["mode"], transport))
+    except (Unavailable, httpx.HTTPError, TimeoutError, ValueError, RecursionError):
+        raise CredentialError("Could not verify the saved connection. Credentials were not changed.") from None
+    return _result(connection, active["mode"], verified)
 
 
 def logout(path):
