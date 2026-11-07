@@ -168,10 +168,17 @@ class Worker:
                 return False
         except (OSError, ValueError, KeyError, TypeError):
             pass
-        client = Client.from_connection(connection(config), transport=self.transport)
+        remote = connection(config)
+        transport = self.transport
+        if transport is None:
+            from . import network_proxy
+
+            # One proxied transport for this pass, shared with the balance reads.
+            transport = network_proxy.async_transport(config, remote.origin, remote.verify())
+        client = Client.from_connection(remote, transport=transport)
         billing = None
         try:
-            billing = await balance(client, config, self.transport)
+            billing = await balance(client, config, transport)
             if billing["status"] != "active":
                 save_status(config, billing["status"], billing)
                 return False
@@ -249,7 +256,7 @@ class Worker:
                 store.fail(request_id, retry_at=time.time() + 900 if released else None)
                 save_status(config, "unavailable", None)
                 return False
-            billing = await balance(client, config, self.transport)
+            billing = await balance(client, config, transport)
             save_status(config, "idle", billing)
             return True
         except Exception:

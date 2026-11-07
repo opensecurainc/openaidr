@@ -145,8 +145,17 @@ fn verify_runtime(path: &Path, release: &release::Release) -> Result<(), String>
     Ok(())
 }
 
+/// Route release traffic through the sensor's proxy setting, if one applies.
+async fn proxied(builder: reqwest::ClientBuilder, url: &str) -> reqwest::ClientBuilder {
+    let sensor = storage::data_home().ok().map(|home| home.join("openaidr/bin").join(crate::platform::SENSOR_BINARY));
+    match super::update_download::release_proxy(sensor, url).await.and_then(|proxy| reqwest::Proxy::all(proxy).ok()) {
+        Some(proxy) => builder.proxy(proxy),
+        None => builder,
+    }
+}
+
 async fn download(url: &str, directory: &Path, progress: impl FnMut(u64, Option<u64>)) -> Result<tempfile::NamedTempFile, String> {
-    let response = super::update_download::client(Duration::from_secs(15 * 60))
+    let response = proxied(super::update_download::client(Duration::from_secs(15 * 60)), url).await
         .redirect(reqwest::redirect::Policy::none()).build().map_err(|_| "Cannot initialize signed updates.")?
         .get(url).send().await.map_err(|_| super::update_check::UNREACHABLE)?;
     super::update_download::receive(response, directory, MAX_DOWNLOAD, progress).await
@@ -154,7 +163,7 @@ async fn download(url: &str, directory: &Path, progress: impl FnMut(u64, Option<
 
 async fn fetch(url: &str, limit: u64, timeout: Duration, progress: impl FnMut(u64, Option<u64>)) -> Result<Vec<u8>, String> {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let client = reqwest::Client::builder().https_only(true)
+    let client = proxied(reqwest::Client::builder(), url).await.https_only(true)
         .redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(15)).timeout(timeout)
         .build().map_err(|_| "Cannot initialize signed updates.")?;
     let response = client.get(url).send().await.and_then(|response| response.error_for_status())

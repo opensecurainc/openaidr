@@ -16,6 +16,7 @@ import errno
 import hashlib
 import hmac
 import json
+import logging
 import ntpath
 import os
 import re
@@ -51,9 +52,12 @@ from .settings_files import content_hash, edit_settings, publication_state
 from openaidr.core.toolmap import map_tool
 from .collectors import content_text
 from .local_http import BoundedThreadingMixIn, HookAdmissionMixIn, LoopbackHTTPServer, loopback_host
-from . import hook_runtime
+from . import hook_runtime, workbuddy
 
 AGENTS = tuple(PRODUCTS)
+# Callers without a timeout owner get a decision only if evaluation finishes
+# within this grace after the check deadline (response formatting time).
+LEGACY_RESULT_GRACE_SECONDS = 0.05
 
 EVENTS = (
     "PreToolUse",
@@ -322,6 +326,11 @@ def available(entry, event, agent):
             continue
         if agent == "claude" and handler.get("if"):
             continue
+        # WorkBuddy starts only PowerShell 7 for an explicit PowerShell hook
+        # shell, so that handler cannot start on stock Windows. Its default
+        # shell falls back to Git Bash or Windows PowerShell; repair to it.
+        if agent == "workbuddy" and handler.get("shell") == "powershell":
+            continue
         # Decisions and final Codex observations must finish before agent exit.
         synchronous = event in DECISION_EVENTS or (
             agent == "codex" and event in CODEX_EVENTS and not CODEX_EVENTS[event][1]
@@ -450,6 +459,26 @@ def place(existing, group):
     return result, moves
 
 
+WORKBUDDY_NO_SHELL = ("WorkBuddy cannot start Git Bash or PowerShell on this device, so OpenAIDR guardrails "
+                      "are off for WorkBuddy and its actions are not blocked. Install Git for Windows or allow "
+                      "PowerShell, then turn WorkBuddy guardrails on again.")
+
+
+def remove_unstartable_workbuddy(path, config_path=None):
+    """Fail open on Windows when WorkBuddy cannot start a hook shell.
+
+    WorkBuddy rejects every action whose hook shell fails to start, even in
+    Shadow mode. Remove only OpenAIDR handlers and record no opt-out, so
+    setup installs them again once a shell starts. Returns True if removed.
+    """
+    # Probe a shell only while our WorkBuddy hooks exist on Windows.
+    if not workbuddy.WINDOWS or not present(path, "workbuddy") or not workbuddy.hook_shell_unavailable():
+        return False
+    uninstall(path, "workbuddy", config_path=config_path)
+    logging.warning("WorkBuddy cannot start a hook shell; removed OpenAIDR WorkBuddy hooks so actions are not blocked")
+    return True
+
+
 def install(path, executable="openaidr", agent="claude", config_path=None, *, explicit=False,
             config_toml=None):
     """Install or repair our hooks. ``explicit`` is a person asking for them
@@ -461,6 +490,11 @@ def install(path, executable="openaidr", agent="claude", config_path=None, *, ex
         from . import hook_opencode
 
         return hook_opencode.install(path, executable, config_path)
+    if agent == "workbuddy" and workbuddy.hook_shell_unavailable():
+        remove_unstartable_workbuddy(path, config_path)
+        if explicit:
+            raise ValueError(WORKBUDDY_NO_SHELL)
+        return
     path = Path(path)
     hook_runtime.register(config_path, hook_runtime.directory(path))
 
@@ -485,7 +519,6 @@ def install(path, executable="openaidr", agent="claude", config_path=None, *, ex
                             "timeout": hook_timeout(event, agent),
                             **({"failClosed": False} if agent == "cursor" else {}),
                             **({"fail_closed": False} if agent == "hermes" else {}),
-                            **({"shell": "powershell"} if agent == "workbuddy" and os.name == "nt" else {}),
                         }
                     ]
                 },
@@ -1127,6 +1160,10 @@ def status(paths=None, config=None):
         }
         if agent in APP_EVENTS:
             result[agent]["available"] = detected[agent]
+            # Without a startable shell, setup must not add WorkBuddy hooks
+            # (they would block every action), so the app is not set up.
+            if agent == "workbuddy" and detected[agent] and workbuddy.hook_shell_unavailable():
+                result[agent].update(available=False, shell_unavailable=True)
             result[agent]["control_events"] = [event for event in managed_events(agent) if controls(PRODUCTS[agent], event)]
         if agent == "hermes":
             result[agent]["approval_pending"] = present(paths[agent], agent) and not hermes_approved(paths[agent])
@@ -1405,22 +1442,12 @@ class HookServer:
             # response before the launcher's own fallback ends the wait.
             delivery_deadline_ns = deadline_ns - hook_runtime.RESPONSE_RESERVE_NS
             response_deadline = time.monotonic() + (delivery_deadline_ns - time.time_ns()) / 1e9
-            completed, result = threading.Event(), {}
-
-            def evaluate_in_background():
-                try:
-                    result.update(self._evaluate(
-                        p, product, begun, started_ns, execution_id, deadline,
-                        result_supported, path_home, timeout_owner, delivery_deadline_ns,
-                    ))
-                except Exception:
-                    pass
-                finally:
-                    completed.set()
-
-            threading.Thread(target=evaluate_in_background, daemon=True).start()
-            if completed.wait(max(0, response_deadline - time.monotonic())) and time.monotonic() < response_deadline:
-                return result or {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
+            result = self._within(response_deadline, lambda: self._evaluate(
+                p, product, begun, started_ns, execution_id, deadline,
+                result_supported, path_home, timeout_owner, delivery_deadline_ns,
+            ))
+            if result is not None:
+                return result
             if self.disconnected:
                 try:
                     self.disconnected({"hook": {
@@ -1429,8 +1456,40 @@ class HookServer:
                 except Exception:
                     pass
             return {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
+        if timeout_owner not in ("agent", "sensor"):
+            # Transport timeouts apply per phase (connect, proxy CONNECT, TLS,
+            # read), so a slow peer can exceed this budget several times over.
+            # Bound the caller's wait by wall clock. A late evaluation is still
+            # recorded but can never restrict the action.
+            result = self._within(deadline + LEGACY_RESULT_GRACE_SECONDS, lambda: self._evaluate(
+                p, product, begun, started_ns, execution_id, deadline,
+                result_supported, path_home, timeout_owner, deadline_ns,
+            ))
+            return result or {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
         return self._evaluate(p, product, begun, started_ns, execution_id, deadline,
                               result_supported, path_home, timeout_owner, deadline_ns)
+
+    @staticmethod
+    def _within(response_deadline, work):
+        """Run ``work`` in the background and wait for it until ``response_deadline``.
+
+        Returns its result (a failed allow if it raised), or ``None`` when the
+        deadline passed first. The work keeps running so its outcome is recorded.
+        """
+        completed, result = threading.Event(), {}
+
+        def run():
+            try:
+                result.update(work())
+            except Exception:
+                pass
+            finally:
+                completed.set()
+
+        threading.Thread(target=run, daemon=True).start()
+        if completed.wait(max(0, response_deadline - time.monotonic())) and time.monotonic() < response_deadline:
+            return result or {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
+        return None
 
     def _evaluate(self, p, product, begun=None, started_ns=None, execution_id=None,
                   deadline=None, result_supported=False, path_home=None,

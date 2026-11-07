@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from .config import validate_device_auth
+from . import network_proxy
 from openaidr.core.enrollment import validate_server_url
 
 MAX_CA_BYTES = 32 << 10
@@ -60,8 +61,9 @@ def verified_context(ca_cert=None, ca_certificate=None):
     return True
 
 
-def client_options(config, ca_certificate=None):
-    """Verified transport and exactly one device authentication method."""
+def client_options(config, ca_certificate=None, *, limits=None, asynchronous=False, proxy_password=None):
+    """Verified transport, exactly one device authentication method, and the
+    configured proxy route (see ``network_proxy``)."""
     validate_server_url(config["server_url"])
     validate_device_auth(config)
     context = verified_context(config.get("ca_cert"), ca_certificate)
@@ -80,7 +82,10 @@ def client_options(config, ca_certificate=None):
             raise ValueError("cannot load mTLS client certificate and key") from exc
     elif config.get("sensor_token"):
         headers["Authorization"] = "Bearer " + config["sensor_token"]
-    return {"verify": context, "headers": headers}
+    options = {"verify": context, "headers": headers}
+    options.update(network_proxy.transport_options(
+        config, context, limits=limits, asynchronous=asynchronous, password=proxy_password))
+    return options
 
 
 def same_origin(first, second):

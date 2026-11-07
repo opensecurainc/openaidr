@@ -9,11 +9,35 @@ import subprocess
 import sys
 
 import pytest
+from test_store import db, tenant  # noqa: F401
 
 from test_store import db  # noqa: F401
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_tenant_login_logout_and_admin_isolation(db):
+    from fastapi.testclient import TestClient
+    from openaidr.server.app import create_app
+    from openaidr.server.auth import hash_password
+    from openaidr.server.config import Config
+
+    workspace = tenant(db)
+    user = db.create_user(workspace["id"], "owner@example.test", "Owner", hash_password("password123"), "owner")
+    cfg = Config(database_url=db.url)
+    cfg.set_services("api")
+    client = TestClient(create_app(cfg, db), headers={"X-OpenAIDR-CSRF": "1"})
+    try:
+        assert client.post("/api/v1/auth/login", json={"email": user["email"], "password": "wrong"}).status_code == 401
+        assert client.post("/api/v1/auth/login", json={"email": user["email"], "password": "password123"}).status_code == 200
+        assert client.get("/api/v1/auth/me").json()["user"]["id"] == user["id"]
+        assert client.get("/admin/v1/auth/me").status_code == 404
+        assert client.post("/admin/v1/auth/login", json={"email": user["email"], "password": "password123"}).status_code == 404
+        assert client.post("/api/v1/auth/logout", json={}).status_code == 204
+        assert client.get("/api/v1/auth/me").status_code == 401
+    finally:
+        client.close()
 
 
 def test_public_server_and_cli_without_cloud_package(tmp_path):
@@ -32,12 +56,16 @@ from unittest.mock import Mock
 from fastapi.testclient import TestClient
 from openaidr.server.app import create_app
 from openaidr.server.config import Config, PLATFORM_AVAILABLE, from_env
+from openaidr.server.store import Store
 
 from openaidr.server import summary_report_sharing
 from openaidr.server.store import Store
 assert callable(summary_report_sharing.read)
 assert not PLATFORM_AVAILABLE
 assert not hasattr(Store, "create_admin")
+assert not hasattr(Store, "get_admin_session")
+assert callable(Store.create_session)
+assert callable(Store.get_session)
 assert not hasattr(Store, "get_platform_overview")
 from openaidr.server import skill_worker
 worker_client = Mock()

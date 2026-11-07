@@ -76,7 +76,8 @@ def test_windows_native_client_requires_no_visual_cpp_runtime(tmp_path, packaged
 @pytest.mark.parametrize("case", ["allow", "deny", "shadow", "backend_failure", "timeout", "unauthorized"])
 @pytest.mark.parametrize("agent,shell", [(agent, shell) for agent in ("claude", "codex")
                                       for shell in ("cmd", "git_bash", "powershell")]
-                         + [("workbuddy", "powershell")])
+                         # WorkBuddy's default hook shell: Git Bash, else Windows PowerShell.
+                         + [("workbuddy", "git_bash"), ("workbuddy", "powershell")])
 def test_windows_packaged_hooks_reach_sensor_within_native_deadline(
     tmp_path, packaged_windows_sensor, local_hook_sensor, backend_hook, case, shell, agent, record_property,
 ):

@@ -960,7 +960,9 @@ mod macos {
         fs::create_dir(&staged).map_err(|_| "Cannot create the staged application.")?;
         let current = installed.version.clone();
         let publication = installed.build["publication_timestamp"].as_i64().unwrap_or(0);
-        let updater = app
+        // The selected proxy also carries the archive download (update.proxy).
+        let proxy = super::super::update_download::release_proxy(crate::bundled_binary(app).ok(), ENDPOINT).await;
+        let mut builder = app
             .updater_builder()
             .endpoints(vec![ENDPOINT.parse().unwrap()])
             .map_err(|_| "The update endpoint is invalid.")?
@@ -979,7 +981,11 @@ mod macos {
                     .danger_accept_invalid_certs(false)
                     .danger_accept_invalid_hostnames(false)
                     .connect_timeout(Duration::from_secs(15))
-            })
+            });
+        if let Some(proxy) = proxy {
+            builder = builder.proxy(proxy);
+        }
+        let updater = builder
             .build()
             .map_err(|_| "Cannot initialize signed updates.")?;
         let lookup = state.check_health.check(&updater, timestamp());

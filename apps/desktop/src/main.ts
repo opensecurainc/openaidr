@@ -11,6 +11,7 @@ import { initAlerts } from './alerts';
 import { initCloudCredit, type CloudProtection } from './cloud-credit';
 import { initMenuBar } from './menu-bar';
 import { initLocalRuntime } from './local-runtime';
+import { initProxy, type ProxyStatus } from './proxy';
 
 const enterpriseOnly = import.meta.env.VITE_ENTERPRISE_ONLY === true;
 
@@ -20,7 +21,7 @@ type SensorStatus = {
   enterprise_enrollment_required?: boolean;
   connection_mode?: 'free' | 'api_key' | 'organization';
   cloud_protection?: CloudProtection | null;
-  sensor_id?: string; server_url?: string; tenant_name?: string;
+  sensor_id?: string; server_url?: string; tenant_name?: string; network_proxy?: ProxyStatus | null;
   desktop_removal?: {state: 'pending' | 'complete'; errors?: string[]; retained_data?: string; data_deletion_started?: boolean; data_deleted?: boolean};
   enrolled?: boolean; running?: boolean; disabled?: boolean; foreground?: boolean; service_downgrade?: boolean; recorded_service_version?: string; version?: string; service_version?: string; service_outdated?: boolean; service_newer?: boolean; settings_stale?: boolean;
   service?: string | { status?: string; installed?: boolean; running?: boolean };
@@ -240,6 +241,7 @@ initAbout(request);
 const menuBar = initMenuBar(() => { void refresh(false); if (!menuBar.hidden()) void refreshUpdate(); }, fitWindow);
 const healthCard = el('health-card');
 const credits = initCredits(healthCard, request, () => !document.hidden && !menuBar.hidden());
+const proxy = initProxy(healthCard, request, () => { void refresh(false); }, () => setStatusOpen(true, false));
 const dashboardLink = document.createElement('a');
 dashboardLink.id = 'dashboard-link';
 dashboardLink.tabIndex = 0;
@@ -287,6 +289,7 @@ function presentHealth(tone: HealthTone, label: string, popover: boolean) {
   healthCard.dataset.tone = tone;
   const compact = popover && tone === 'online' && label === 'Connected' && !TELEMETRY_AGENTS.some(agent => current?.telemetry?.[`${agent}_opted_out`]);
   healthCard.classList.toggle('compact-status', compact);
+  proxy.update(compact && !!current?.sensor_id, current?.network_proxy);
   healthCard.setAttribute('aria-labelledby', compact ? 'credit-title' : 'health-title');
   healthCard.classList.toggle('status-popover', popover);
   if (popover) el('health-description').removeAttribute('title');

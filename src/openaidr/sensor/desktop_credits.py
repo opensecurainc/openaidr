@@ -27,6 +27,10 @@ def read(config, *, transport=None):
                 else:
                     from .api_key import connection as api_connection
                     connection = api_connection(config)
+                if transport is None:
+                    from . import network_proxy
+
+                    transport = network_proxy.async_transport(config, connection.origin, connection.verify())
                 result = asyncio.run(desktop_credits.read(connection, 'free' if mode == 'free' else 'paid', transport=transport))
             else:
                 client = Client.from_config(config)

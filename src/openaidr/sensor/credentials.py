@@ -413,6 +413,7 @@ def exchange(
                 version=version,
                 ca_cert=trust,
                 ca_certificate=ca,
+                network=config.get("network"),
             )
         )
         try:

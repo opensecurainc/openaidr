@@ -211,6 +211,33 @@ def setup(config):
     return 0
 
 
+def proxy_command(config, args):
+    from . import network_proxy
+
+    if args.operation == "show":
+        print(json.dumps(network_proxy.public_status(config), indent=2))
+        return 0
+    if args.operation == "clear":
+        network_proxy.clear(config)
+        print("Proxy settings removed. Restart the sensor to apply: openaidr restart")
+        return 0
+    if args.operation == "test" and not (args.url or args.direct):
+        settings = network_proxy.configured(config)
+        if settings is None:
+            raise ValueError("No proxy is configured. Pass --url to test one.")
+    else:
+        settings = ({"mode": "direct"} if args.direct else
+                    {"mode": "manual", "url": args.url, "bypass": args.bypass, "username": args.username})
+    password = sys.stdin.readline().rstrip("\r\n") if args.password_stdin else None
+    if args.operation == "test":
+        result = network_proxy.test_connection(config, settings, password)
+        print(result["message"])
+        return 0 if result["ok"] else 1
+    network_proxy.save(config, settings, password)
+    print("Proxy settings saved. Restart the sensor to apply: openaidr restart")
+    return 0
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv == ["desktop-usage"]:
@@ -301,6 +328,22 @@ def main(argv=None):
     credential_parser.add_argument(
         "--token", default="", help="administrator-issued recovery token"
     )
+    proxy_parser = sub.add_parser(
+        "proxy",
+        help="show or change the HTTP(S) proxy used to reach the OpenAIDR server",
+        description=(
+            "Route sensor traffic to the OpenAIDR server through an HTTP or HTTPS proxy. "
+            "The password is read from stdin and kept in the system credential store. "
+            "Restart the sensor to apply changes."
+        ),
+    )
+    proxy_parser.add_argument("operation", choices=("show", "set", "clear", "test"))
+    proxy_parser.add_argument("--config")
+    proxy_parser.add_argument("--url", help="http:// or https:// proxy URL")
+    proxy_parser.add_argument("--bypass", default="", help="comma-separated hosts that connect directly")
+    proxy_parser.add_argument("--username", default="", help="proxy user name (Basic authentication)")
+    proxy_parser.add_argument("--password-stdin", action="store_true", help="read the proxy password from stdin")
+    proxy_parser.add_argument("--direct", action="store_true", help="connect directly and ignore proxy environment variables")
     inventory_parser = sub.add_parser(
         "inventory", help="scan installed software locally without enrollment"
     )
@@ -588,6 +631,8 @@ def main(argv=None):
             config = Config(args.config)
         if args.command == "setup":
             return setup(config)
+        if args.command == "proxy":
+            return proxy_command(config, args)
         if args.command == "credentials":
             try:
                 from .credentials import operate

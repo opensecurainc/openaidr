@@ -21,7 +21,7 @@ from openaidr.core.cloud_protection import project as cloud_protection
 from openaidr.core.event import now
 from .config import IDENTITY_FIELDS, Config, configuration_lock
 from openaidr.core.files import atomic_write
-from . import desktop_edition, hooks, integrations, service, updates
+from . import desktop_edition, hooks, integrations, network_proxy, service, updates
 from .runtime import NOT_ENROLLED, Client, check_reenrollment, discard_policy_cache, enroll
 from .telemetry import settings, token_fingerprint
 from .tls import same_origin, validate_ca_certificate
@@ -66,7 +66,14 @@ ACTIONS = {
     "service.install",
     "service.start",
     "service.restart",
+    "proxy.status",
+    "proxy.test",
+    "proxy.save",
+    "proxy.route",
 }
+PROXY_FIELDS = {"mode", "url", "bypass", "username", "password"}
+# Only the desktop updater asks for a route, and only to the release server.
+RELEASE_ORIGIN = "https://releases.opensecura.ai/"
 
 
 def app_version():
@@ -257,6 +264,33 @@ def live_setting(key, value):
     return bool(value)
 
 
+def proxy_action(config, action, params):
+    """Network proxy settings for the desktop app. Passwords arrive only on stdin
+    and go only to the credential store; responses never contain them, except
+    the release-server route the updater passes straight to its HTTP client."""
+    if action == "proxy.status":
+        return network_proxy.public_status(config)
+    if action == "proxy.route":
+        url = params.get("url")
+        if not isinstance(url, str) or not url.startswith(RELEASE_ORIGIN):
+            raise ValueError("unsupported proxy route")
+        return {"proxy": network_proxy.route(config, url)}
+    settings = {key: params[key] for key in ("mode", "url", "bypass", "username") if key in params}
+    password = params.get("password")
+    if password is not None and not isinstance(password, str):
+        raise ValueError("Enter the proxy password.")
+    if action == "proxy.test":
+        return network_proxy.test_connection(config, settings, password)
+    with configuration_lock(config.path):
+        config = Config.load(config.path)
+        network_proxy.save(config, settings, password)
+    # The service reads the setting at startup. Hooks fail open while it restarts.
+    current = status(config)
+    if current.get("running") and not current.get("foreground"):
+        service.manage("restart", config, timeout=10)
+    return network_proxy.public_status(Config.load(config.path))
+
+
 def status(config, *, deadline=None, private=False):
     def probe_options():
         if deadline is None:
@@ -355,6 +389,8 @@ def status(config, *, deadline=None, private=False):
         "connection_mode": config.get("connection_mode", "organization"),
         "sensor_id": config.get("sensor_id", ""),
         "server_url": config.get("server_url", ""),
+        # The saved setting, for the connected status; never the password.
+        "network_proxy": network_proxy.public_status(config, check_password=False),
         "tenant_name": (live or {}).get("tenant_name", ""),
         "cloud_protection": cloud_protection((live or {}).get("cloud_protection", (live or {}).get("cloud_credit"))),
         "service": service_status,
@@ -800,7 +836,8 @@ def preview_enrollment(config, link, ca_certificate=None):
     inherited_ca = (config.get("ca_cert")
                     if supplied_ca is None and same_origin(config.get("server_url", ""), server)
                     else None)
-    client = Client(server, version=app_version(), ca_cert=inherited_ca, ca_certificate=supplied_ca)
+    client = Client(server, version=app_version(), ca_cert=inherited_ca, ca_certificate=supplied_ca,
+                    network=config.get("network"))
     try:
         result = client.post("enrollment/preview", {"enrollment_token": token})
     except httpx.HTTPStatusError as exc:
@@ -809,7 +846,7 @@ def preview_enrollment(config, link, ca_certificate=None):
                    "The server could not preview this link. Ask your administrator to check enrollment link support on the server.")
         raise ValueError(message) from None
     except httpx.RequestError:
-        raise ValueError("Could not verify the enrollment server. Check your connection or ask your administrator to check the server certificate.") from None
+        raise ValueError("Could not verify the enrollment server. Check your connection, set a proxy in Settings > Network proxy if your network requires one, or ask your administrator to check the server certificate.") from None
     finally:
         client.close()
     try:
@@ -933,6 +970,9 @@ def handle(request):
             "tenant_id",
         },
         "api-key.connect": {"api_key"},
+        "proxy.test": PROXY_FIELDS,
+        "proxy.save": PROXY_FIELDS,
+        "proxy.route": {"url"},
         "telemetry.install": {"agents", "paths"},
         "telemetry.remove": {"agents", "paths"},
     }.get(action, set())
@@ -961,6 +1001,8 @@ def handle(request):
         from .endpoint_alerts import exchange
 
         return exchange(config, action, params)
+    if action.startswith("proxy."):
+        return proxy_action(config, action, params)
     if action == "status":
         return status(config)
     if action == "credits.summary":

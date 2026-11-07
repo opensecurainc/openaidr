@@ -80,7 +80,7 @@ const userAgents = {
 
 const platforms = {
   mac: { label: "Mac", installers: [
-    ["Apple Silicon", process.env.OPENAIDR_DESKTOP_MAC_ARM64_URL, LATEST_INSTALLERS.macArm64],
+    ["Mac", process.env.OPENAIDR_DESKTOP_MAC_ARM64_URL, LATEST_INSTALLERS.macArm64],
   ] },
   windows: { label: "Windows", installers: [["Windows", process.env.OPENAIDR_DESKTOP_WINDOWS_X64_URL, LATEST_INSTALLERS.windowsX64]] },
   linux: { label: "Linux", installers: [["Linux", process.env.OPENAIDR_DESKTOP_LINUX_X64_URL, LATEST_INSTALLERS.linuxX64]] },
@@ -211,7 +211,11 @@ test.describe("on a Mac", () => {
     await expect(page.locator("main")).toContainText("Your administrator sets the use limit and expiration.");
     await expect(page.locator("main")).not.toContainText("It works once");
     await expect(page.locator("main")).toContainText("copy OpenAIDR to Applications");
-    await expect(page.locator("main")).toContainText("Intel Macs are not supported");
+    // The public release is universal; an administrator's installer may not be.
+    await expect(page.locator("main")).toContainText(desktopInstallerUrl(process.env.OPENAIDR_DESKTOP_MAC_ARM64_URL)
+      ? "if it does not open on an Intel Mac, ask them for a current release"
+      : "The installer works on Apple Silicon and Intel Macs.");
+    await expect(page.locator("main")).not.toContainText("Intel Macs are not supported");
     await expect(page.getByRole("link", { name: "Download for Intel", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /^Download for / })).toHaveCount(1);
 

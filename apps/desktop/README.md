@@ -519,7 +519,7 @@ confirm the organization to connect without pasting the link into the app.
 
 | Platform | Installation and verification |
 | --- | --- |
-| Mac | macOS 12 or later, Apple Silicon. Uses the published DMG, checks the OpenSecura signature and Gatekeeper, then installs in `/Applications`. The account must have write access to that folder. |
+| Mac | macOS 12 or later, Apple Silicon or Intel. Uses the published universal DMG, checks the OpenSecura signature and Gatekeeper, then installs in `/Applications`. The account must have write access to that folder. |
 | Windows | Windows x64, 64-bit PowerShell 5.1 or 7, without **Run as administrator**. Downloads the installer ZIP, checks its contents and the OpenSecura Authenticode signature and timestamp, then runs the per-user installer. |
 | Linux | Ubuntu/Debian x64 with Python 3, curl, GnuPG, and sudo. Downloads the DEB and verifies its checksum, package identity, and detached signature against the pinned OpenSecura signing key. Uses sudo to protect the package copy and install it with `apt-get`, including native dependencies. Verifies the protected copy before installation. Enrollment and `openaidr setup` run as the signed-in user. |
 
@@ -552,7 +552,7 @@ password, or open the desktop app. Successful installation returns exit code 0
 only after the sensor service is running; failures return a nonzero exit code
 and a message in the MDM output. The enrollment secret stays on standard input.
 
-This mode requires macOS 12 or later on Apple Silicon and an active console
+This mode requires macOS 12 or later on Apple Silicon or Intel and an active console
 user. At the login screen or during Setup Assistant, it exits before installing
 or enrolling; configure MDM to retry after login while the link is valid.
 Retries preserve an existing enrollment without consuming another token and

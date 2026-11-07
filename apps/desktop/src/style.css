@@ -461,3 +461,17 @@ input::file-selector-button{margin-right:8px}
 #sensor-details > summary::after { content: '›'; }
 #sensor-details .stats { margin-top: 10px; }
 .health-card button, .health-card a, #sensor-details > summary { scroll-margin-block: 8px; }
+
+/* Network proxy */
+#proxy-row{margin-top:8px;padding-top:4px;border-top:1px solid var(--border);min-width:0}
+#proxy-row #proxy-summary{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proxy-dialog{overflow:auto;overscroll-behavior:contain;scroll-padding:16px}
+.proxy-dialog form{display:flex;flex-direction:column;gap:8px}
+.proxy-dialog h2,.proxy-dialog p{margin:0}
+.proxy-dialog fieldset{display:flex;gap:16px;margin:0;padding:0;border:0}
+.proxy-dialog legend{padding:0;margin-bottom:4px;font-size:12px;font-weight:600}
+.proxy-dialog #proxy-fields:not([hidden]),.proxy-dialog #proxy-credentials:not([hidden]){display:flex;flex-direction:column;gap:6px}
+.proxy-choice{flex-direction:row;align-items:center;gap:6px;font-weight:400}
+.proxy-choice input{width:auto;height:auto}
+#proxy-error{color:var(--danger);font-size:12px}
+#proxy-test-result[data-tone=error]{color:var(--danger)}

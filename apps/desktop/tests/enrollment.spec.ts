@@ -17,6 +17,7 @@ const certificate = '-----BEGIN CERTIFICATE-----\nY2VydGlmaWNhdGU=\n-----END CER
 
 type AlertFixture = {id:string;title:string;message:string;command:string;installed_version:string;required_version:string;sender_name:string;created_at:string;expires_at:string;received_at:string|null;acknowledged_at:string|null};
 type Mock = {
+  proxy?: {status:Record<string, unknown>; test?:{ok:boolean;message:string}; saveError?:string};
   localRuntime?: {docker_ready:boolean;docker_action?:'install'|'start'|'manual';existing:boolean;managed:boolean;connected:boolean;server_url:string};
   localDockerError?: string;
   localRuntimeError?: string;
@@ -138,6 +139,18 @@ async function boot(page: Page, mock: Mock) {
         (window as unknown as {removalProgress?:(stage:string) => void}).removalProgress = stage => channel?.onmessage({stage,event:'start'});
       }
       if (action === 'alerts.focus') return;
+      if (action === 'proxy.status') return structuredClone(win.mock.proxy?.status ?? {mode:'default'});
+      if (action === 'proxy.test') return win.mock.proxy?.test ?? {ok:true,message:'Reached the OpenAIDR server through the proxy in 84 ms.'};
+      if (action === 'proxy.save') {
+        if (win.mock.proxy?.saveError) throw new Error(win.mock.proxy.saveError);
+        const {action:_action, password, ...rest} = args.request as unknown as Record<string, unknown>;
+        const keep = (win.mock.proxy?.status as {password_saved?:boolean} | undefined)?.password_saved;
+        const saved = {...rest, ...(rest.username ? {password_saved:!!password || !!keep} : {})};
+        win.mock.proxy = {...win.mock.proxy, status:saved};
+        const {password_saved:_saved, ...visible} = saved as Record<string, unknown>;
+        win.mock.status = {...win.mock.status, network_proxy:visible};
+        return saved;
+      }
       if (action === 'alerts.list') {
         if (win.mock.alertsError) throw new Error(win.mock.alertsError);
         return {supported:win.mock.alerts !== undefined,scope:'a'.repeat(64),sensor_id:win.mock.status.sensor_id,server_url:win.mock.status.server_url,items:structuredClone(win.mock.alerts ?? [])};
@@ -1318,7 +1331,7 @@ for (const label of ['Show in menu bar', 'Show in system tray']) for (const maxW
         doneBelowConnection:done.top > connection.bottom,
       };
     })).toEqual({connectBelowLink:true,doneBelowConnection:true});
-    await expect(dialog.locator('#settings-actions button')).toHaveText(['Done']);
+    await expect(dialog.locator('#settings-actions button')).toHaveText(['Network proxy', 'Done']);
     expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     if (maxWindowHeight === 720) expect(await dialog.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
     await dialog.getByRole('button', {name:'Done',exact:true}).focus();
@@ -2499,7 +2512,7 @@ async function expectControlHierarchy(page: Page) {
     const close = ['close-status','close-connection','close-update','close-about','simulation-dismiss'].includes(element.id);
     const creditDisclosure = element.matches('.credit-disclosure, #sensor-details > summary');
     const disclosure = creditDisclosure || element.matches('summary');
-    const secondary = ['back-to-choices','choose-organization','choose-local-runtime','local-back','local-check','local-credentials','local-done','change-connection','remove-app','check-update','show-about','update-secondary','cancel-change','remove-certificate','cancel-remove','resume-app','show-simulation','simulation-close'].includes(element.id);
+    const secondary = ['settings-proxy','back-to-choices','choose-organization','choose-local-runtime','local-back','local-check','local-credentials','local-done','change-connection','remove-app','check-update','show-about','update-secondary','cancel-change','remove-certificate','cancel-remove','resume-app','show-simulation','simulation-close'].includes(element.id);
     const destructive = element.id === 'trash-app' || (element.id === 'confirm-remove' && /^(Uninstall|Delete)/.test(element.textContent || ''));
     const background = close || disclosure ? 'rgba(0, 0, 0, 0)' : secondary ? (dark ? 'rgb(15, 29, 56)' : 'rgb(247, 248, 250)') : destructive ? 'rgb(135, 36, 32)' : 'rgb(23, 55, 111)';
     const color = creditDisclosure ? (dark ? 'rgb(111, 155, 230)' : 'rgb(23, 55, 111)') : close || disclosure ? (dark ? 'rgb(154, 166, 184)' : 'rgb(90, 99, 114)') : secondary ? (dark ? 'rgb(230, 234, 241)' : 'rgb(28, 34, 48)') : 'rgb(255, 255, 255)';
@@ -8065,6 +8078,133 @@ test('Posture discards a late consent response and old billing when the connecti
   expect((await requests(page)).filter(row => row.action === 'posture.configure')).toEqual([{action:'posture.configure',automatic:true,scope:'a'.repeat(64)}]);
 });
 
+const proxyStatus = {mode:'manual', url:'http://proxy.corp.example:3128', bypass:['*.corp.example','10.0.0.1'], username:'svc-openaidr'};
+const proxyConnected = {...converged, tenant_name:'Example organization', heartbeat:{last_success_at:'2026-10-08T02:50:00Z',error:''}, activity:{queue_depth:0}};
+const proxyRequests = (page:Page) => requests(page).then(rows => rows.filter(row => String(row.action).startsWith('proxy.')));
+
+for (const maxWindowHeight of [720, 320]) {
+  test(`network proxy opens from the connected status within a ${maxWindowHeight}px work area`, async ({page}, testInfo) => {
+    await page.clock.install({time:new Date('2026-10-08T02:50:00Z')});
+    await boot(page, {status:{...proxyConnected, network_proxy:proxyStatus}, maxWindowHeight, proxy:{status:{...proxyStatus, password_saved:true}}});
+    await expect(page.locator('#sensor-status')).toHaveAccessibleName('Sensor status: Connected');
+    await openSensorStatus(page, false);
+    const panel = page.locator('#health-card');
+    await expect(panel).toHaveClass(/compact-status/);
+    await expect(page.locator('#proxy-summary')).toHaveText('Through proxy proxy.corp.example:3128');
+    expect(await panel.evaluate(node => node.scrollWidth === node.clientWidth)).toBe(true);
+    if (maxWindowHeight === 720) await expectFitsWindow(page);
+    const open = page.getByRole('button', {name:'Network proxy', exact:true});
+    await open.focus();
+    await expect(open).toBeInViewport({ratio:1});
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', {name:'Network proxy'});
+    await expect(dialog).toBeVisible();
+    await expect(page.locator('#proxy-url')).toBeFocused();
+    await expect(page.locator('#proxy-manual')).toBeChecked();
+    await expect(page.locator('#proxy-url')).toHaveValue('http://proxy.corp.example:3128');
+    await expect(page.locator('#proxy-bypass')).toHaveValue('*.corp.example, 10.0.0.1');
+    await expect(page.locator('#proxy-username')).toHaveValue('svc-openaidr');
+    await expect(page.locator('#proxy-password')).toHaveValue('');
+    await expect(page.locator('#proxy-password')).toHaveAttribute('placeholder', 'Saved password');
+    expect(await page.locator('#proxy-dialog').evaluate(node => node.scrollWidth === node.clientWidth)).toBe(true);
+    if (maxWindowHeight === 720) await expectFitsWindow(page);
+    else {
+      // A short work area scrolls inside the dialog; every control stays reachable.
+      for (const id of ['proxy-direct', 'proxy-url', 'proxy-password', 'test-proxy', 'cancel-proxy', 'save-proxy']) {
+        await page.locator('#' + id).focus();
+        await expect(page.locator('#' + id)).toBeInViewport({ratio:1});
+      }
+    }
+    await page.screenshot({path:testInfo.outputPath(`network-proxy-${maxWindowHeight}.png`)});
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(open).toBeFocused();
+    expect((await proxyRequests(page)).map(row => row.action)).toEqual(['proxy.status']);
+  });
+}
+
+test('network proxy validates, tests, and saves without displaying the password', async ({page}) => {
+  await page.clock.install({time:new Date('2026-10-08T02:50:00Z')});
+  await boot(page, {status:proxyConnected, maxWindowHeight:720, proxy:{status:{mode:'default'}}});
+  await openSensorStatus(page, false);
+  await expect(page.locator('#proxy-summary')).toHaveText('Direct connection');
+  await page.getByRole('button', {name:'Network proxy', exact:true}).click();
+  const dialog = page.getByRole('dialog', {name:'Network proxy'});
+  const url = page.locator('#proxy-url'), alert = page.locator('#proxy-error'), save = dialog.getByRole('button', {name:'Save'});
+  await expect(page.locator('#proxy-direct')).toBeChecked();
+  await expect(page.locator('#proxy-fields')).toBeHidden();
+  await expect(page.locator('#test-proxy')).toBeDisabled();
+  await page.locator('#proxy-manual').check();
+  await expect(url).toBeEnabled();
+  for (const [value, message] of [
+    ['', 'Enter a proxy URL.'],
+    ['socks5://proxy.corp.example:1080', 'Use an http:// or https:// proxy URL.'],
+    ['http://alice:pw@proxy.corp.example:8080', 'Enter the user name and password separately, not in the URL.'],
+    ['http://proxy.corp.example:8080/path', 'Remove the path from the proxy URL.'],
+  ]) {
+    await url.fill(value);
+    await save.click();
+    await expect(alert).toHaveText(message);
+    await expect(url).toBeFocused();
+  }
+  await url.fill('https://proxy.corp.example:8443');
+  await page.locator('#proxy-bypass').fill('*.corp.example, bad host!');
+  await save.click();
+  await expect(alert).toHaveText('“host!” is not a host name, domain, or IP address.');
+  await page.locator('#proxy-bypass').fill('*.corp.example, 10.0.0.1');
+  await page.locator('#proxy-auth').check();
+  await save.click();
+  await expect(alert).toHaveText('Enter the proxy user name.');
+  await page.locator('#proxy-username').fill('svc-openaidr');
+  await save.click();
+  await expect(alert).toHaveText('Enter the proxy password.');
+  await expect(page.locator('#proxy-password')).toBeFocused();
+  expect(await proxyRequests(page)).toEqual([{action:'proxy.status'}]);
+  await page.locator('#proxy-password').fill('pw-secret-value');
+  await page.getByRole('button', {name:'Test connection'}).click();
+  await expect(page.locator('#proxy-test-result')).toHaveText('Reached the OpenAIDR server through the proxy in 84 ms.');
+  await expect(alert).toBeHidden();
+  const expected = {mode:'manual', url:'https://proxy.corp.example:8443', bypass:['*.corp.example','10.0.0.1'], username:'svc-openaidr', password:'pw-secret-value'};
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.test', ...expected});
+  expect(await page.locator('body').innerText()).not.toContain('pw-secret-value');
+  await page.evaluate(() => { (window as unknown as {mock:Mock}).mock.proxy!.saveError = 'No secure credential store is available.'; });
+  await save.click();
+  await expect(alert).toHaveText('No secure credential store is available.');
+  await expect(dialog).toBeVisible();
+  await page.evaluate(() => { delete (window as unknown as {mock:Mock}).mock.proxy!.saveError; });
+  await save.click();
+  await expect(dialog).toBeHidden();
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.save', ...expected});
+  await expect(page.getByRole('button', {name:'Network proxy', exact:true})).toBeFocused();
+  await expect(page.locator('#proxy-summary')).toHaveText('Through proxy proxy.corp.example:8443');
+  await page.getByRole('button', {name:'Network proxy', exact:true}).click();
+  await expect(page.locator('#proxy-password')).toHaveValue('');
+  await expect(page.locator('#proxy-password')).toHaveAttribute('placeholder', 'Saved password');
+  await page.locator('#proxy-direct').check();
+  await save.click();
+  await expect(dialog).toBeHidden();
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.save', mode:'direct'});
+  await expect(page.locator('#proxy-summary')).toHaveText('Direct connection');
+});
+
+test('network proxy is in Settings before enrollment and absent from error status', async ({page}) => {
+  await boot(page, {status:unenrolled, maxWindowHeight:720, proxy:{status:{mode:'default'}}});
+  await page.locator('#change-connection').click();
+  const open = page.locator('#settings-proxy');
+  await expect(open).toHaveAccessibleName('Network proxy');
+  await open.click();
+  const dialog = page.getByRole('dialog', {name:'Network proxy'});
+  await expect(dialog).toBeVisible();
+  await expectFitsWindow(page);
+  await page.locator('#proxy-manual').check();
+  await page.locator('#proxy-url').fill('http://proxy.corp.example:3128');
+  await dialog.getByRole('button', {name:'Save'}).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('#connection-dialog')).toBeVisible();
+  await expect(open).toBeFocused();
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.save', mode:'manual', url:'http://proxy.corp.example:3128', bypass:[], username:''});
+  await expect(page.locator('#proxy-row')).toBeHidden();
+});
 
 for (const maxWindowHeight of [720, 420]) test(`enterprise enrollment and Settings fit a ${maxWindowHeight}px work area`, async ({page}, testInfo) => {
   test.skip(process.env.OPENAIDR_DESKTOP_EDITION !== 'enterprise', 'Enterprise build only');

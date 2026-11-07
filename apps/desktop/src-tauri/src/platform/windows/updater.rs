@@ -311,14 +311,19 @@ async fn check(app: &AppHandle, directory: &Path, state: &mut State, mode: Mode,
     let publication = installed["publication_timestamp"].as_i64().unwrap_or(0);
     state.attempted_at = Some(timestamp());
     state.set(directory, "checking")?;
-    let updater = app.updater_builder().endpoints(vec![ENDPOINT.parse().unwrap()])
+    // The selected proxy also carries the archive download (update.proxy).
+    let proxy = super::update_download::release_proxy(crate::bundled_binary(app).ok(), ENDPOINT).await;
+    let mut builder = app.updater_builder().endpoints(vec![ENDPOINT.parse().unwrap()])
         .map_err(|_| "The update endpoint is invalid.")?
         .version_comparator(move |_, remote| remote.version != current && !remote.version.build.is_empty()
             && remote.pub_date.is_some_and(|date| date.unix_timestamp() > publication))
         .timeout(Duration::from_secs(30))
         .configure_client(|client| client.https_only(true).danger_accept_invalid_certs(false)
-            .danger_accept_invalid_hostnames(false).connect_timeout(Duration::from_secs(15)))
-        .build().map_err(|_| "Cannot initialize signed updates.")?;
+            .danger_accept_invalid_hostnames(false).connect_timeout(Duration::from_secs(15)));
+    if let Some(proxy) = proxy {
+        builder = builder.proxy(proxy);
+    }
+    let updater = builder.build().map_err(|_| "Cannot initialize signed updates.")?;
     let lookup = state.check_health.check(&updater, timestamp());
     let Some(mut update) = (match task { Some(task) => task.run(lookup).await, None => lookup.await })? else {
         state.latest = app.package_info().version.to_string();
