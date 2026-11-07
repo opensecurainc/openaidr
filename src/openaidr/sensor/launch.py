@@ -83,7 +83,7 @@ def _authorization(config, deny=False, recover=None):
 async def bootstrap(config):
     """Authenticate record recovery without loading or persisting policy rules."""
     authorization = await _durable_call(_authorization, config)
-    backend = Backend(config, client_options=client_options(config))
+    backend = Backend(config, client_options=client_options(config, asynchronous=True))
     try:
         value = await backend.bootstrap()
         # Do not overwrite concurrent credential renewal or re-enrollment.

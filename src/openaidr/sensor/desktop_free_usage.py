@@ -15,6 +15,10 @@ def read(config, *, transport=None):
         if not config.enrolled() or config.get('connection_mode') != 'free':
             raise ValueError('Monthly free usage requires a free-plan connection.')
         connection = prepare(config).connection
+        if transport is None:
+            from . import network_proxy
+
+            transport = network_proxy.async_transport(config, connection.origin, connection.verify())
         try:
             raw = asyncio.run(fetch(connection, transport))
             if not isinstance(raw, dict) or raw.get('tenant_id') != connection.tenant_id or raw.get('plan') != 'free':

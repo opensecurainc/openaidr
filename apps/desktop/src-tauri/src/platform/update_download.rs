@@ -9,6 +9,18 @@ use tempfile::NamedTempFile;
 const FAILED: &str = "The update download or signature verification failed. The current app was kept.";
 const TOO_LARGE: &str = "The update exceeds the download size limit. The current app was kept.";
 
+/// The proxy that the sensor's network setting selects for a release URL, if any.
+/// The URL can carry Basic credentials, so it is only handed to the HTTP client.
+/// A missing or older sensor keeps the existing direct/environment behavior.
+pub(super) async fn release_proxy(sensor: Option<std::path::PathBuf>, url: &str) -> Option<reqwest::Url> {
+    let sensor = sensor?;
+    let request = serde_json::json!({"action":"proxy.route","params":{"url":url}});
+    // Starting the sensor takes a moment; keep it off the async workers.
+    let value = tauri::async_runtime::spawn_blocking(move || crate::bridge(&sensor, request)).await.ok()?.ok()?;
+    let proxy = reqwest::Url::parse(value.get("proxy")?.as_str()?).ok()?;
+    matches!(proxy.scheme(), "http" | "https").then_some(proxy)
+}
+
 pub(super) fn client(timeout: Duration) -> reqwest::ClientBuilder {
     let _ = rustls::crypto::ring::default_provider().install_default();
     reqwest::Client::builder().https_only(!cfg!(test)).timeout(timeout)
