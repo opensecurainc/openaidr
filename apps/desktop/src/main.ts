@@ -12,6 +12,7 @@ import { initCloudCredit, type CloudProtection } from './cloud-credit';
 import { initMenuBar } from './menu-bar';
 import { initLocalRuntime } from './local-runtime';
 import { initProxy, type ProxyStatus } from './proxy';
+import { initGoogleConnection } from './google-connection';
 
 const enterpriseOnly = import.meta.env.VITE_ENTERPRISE_ONLY === true;
 
@@ -20,6 +21,7 @@ type TelemetryClient = {pid:number; process_name:string; started_at:string; last
 type SensorStatus = {
   enterprise_enrollment_required?: boolean;
   connection_mode?: 'free' | 'api_key' | 'organization';
+  google_account?: {email:string};
   cloud_protection?: CloudProtection | null;
   sensor_id?: string; server_url?: string; tenant_name?: string; network_proxy?: ProxyStatus | null;
   desktop_removal?: {state: 'pending' | 'complete'; errors?: string[]; retained_data?: string; data_deletion_started?: boolean; data_deleted?: boolean};
@@ -241,6 +243,10 @@ initAbout(request);
 const menuBar = initMenuBar(() => { void refresh(false); if (!menuBar.hidden()) void refreshUpdate(); }, fitWindow);
 const healthCard = el('health-card');
 const credits = initCredits(healthCard, request, () => !document.hidden && !menuBar.hidden());
+const googleConnection = enterpriseOnly ? null : initGoogleConnection(healthCard, request, async () => {
+  await perform('google.connect', {});
+  if (!current?.google_account) throw new Error('Could not connect your Google account. Select Sign in with Google to retry.');
+});
 const proxy = initProxy(healthCard, request, () => { void refresh(false); }, () => setStatusOpen(true, false));
 const dashboardLink = document.createElement('a');
 dashboardLink.id = 'dashboard-link';
@@ -441,6 +447,7 @@ function availability() {
   usage.setAvailability(!tauri || (busy && !settingUp) ? 'disabled'
     : busy || awaitingSensor() || current?.desktop_update?.status_cached ? 'cached' : 'enabled');
   credits.setAvailability(tauri && !busy && !awaitingSensor() && !current?.desktop_update?.status_cached);
+  googleConnection?.setAvailability(tauri && !busy && !current?.desktop_update?.status_cached);
   guardrails.setAvailability(tauri && !busy && !awaitingSensor() && !current?.desktop_update?.status_cached);
   posture.setAvailability(tauri && !busy && !awaitingSensor() && !current?.desktop_update?.status_cached);
   for (const id of ['sensor-status', 'close-status', 'show-about']) (el(id) as HTMLButtonElement).disabled = false;
@@ -588,6 +595,7 @@ function render(status: SensorStatus) {
   }
   current = status;
   credits.setStatus(status);
+  googleConnection?.setStatus(status);
   placeDashboard();
   if (localRuntime?.isOpen()) {
     if (status.desktop_removal) localRuntime?.dismiss();
@@ -647,7 +655,7 @@ function render(status: SensorStatus) {
   else if (status.disabled) { title = 'Sensor disabled by your organization'; description = 'Activity collection is off. Contact your administrator to enable it.'; tone = 'idle'; }
   else if (holdsAgents(status)) { title = 'Sensor needs a restart'; description = restartGuidance; }
   else if (status.foreground && status.running) { title = 'Sensor is running manually'; description = manualGuidance; tone = 'warning'; }
-  else if (status.running && status.heartbeat && !status.heartbeat.last_success_at) { title = standalone ? status.connection_mode === 'api_key' ? 'Connecting with your API key' : 'Connecting to the free service' : 'Waiting for your organization'; description = 'The sensor is making its first connection.'; tone = 'loading'; }
+  else if (status.running && status.heartbeat && !status.heartbeat.last_success_at) { title = standalone ? status.google_account ? 'Connecting your Google account' : status.connection_mode === 'api_key' ? 'Connecting with your API key' : 'Connecting to the free service' : 'Waiting for your organization'; description = 'The sensor is making its first connection.'; tone = 'loading'; }
   else if (status.running && telemetry.enabled === false) { title = 'Telemetry is disabled'; description = 'Agent telemetry is disabled in sensor settings. Guardrails can still collect activity.'; }
   else if (status.running && telemetry.authentication_failed) {
     if (telemetry.authentication_clients?.length) {
@@ -662,7 +670,7 @@ function render(status: SensorStatus) {
     title = hasContact ? 'Sensor connected' : 'Sensor is running';
     const organization = status.tenant_name?.trim() || 'your organization';
     description = connectionGrace ? `Last connected ${contactDescription}. Retrying automatically.` : hasContact ? `${CONNECTED_DESCRIPTION}${organization}.` : 'The sensor is running on this device.';
-    if (standalone && hasContact && !connectionGrace) description = status.connection_mode === 'api_key' ? 'Connected with your API key. Usage stays on this device.' : 'Connected to the free service. Usage stays on this device.';
+    if (standalone && hasContact && !connectionGrace) description = status.google_account ? 'Connected to your Google account. Usage stays on this device.' : status.connection_mode === 'api_key' ? 'Connected with your API key. Usage stays on this device.' : 'Connected to the free service. Usage stays on this device.';
     tone = 'online';
     const disconnected = TELEMETRY_AGENTS.filter(agent => telemetry[`${agent}_opted_out`]).map(agent => AGENT_NAMES[agent]);
     if (disconnected.length) description += ` ${disconnected.join(' and ')} telemetry is disconnected.`;
@@ -860,6 +868,7 @@ async function refresh(showError = true) {
     alerts.setStatus({});
     cloudCredit.setStatus({});
     credits.setStatus({});
+    googleConnection?.setStatus({});
     placeDashboard();
     renderUpdate(undefined);
     for (const id of ['queued','sent','delivery','activity-queued']) text(id, null);
@@ -946,7 +955,7 @@ async function perform(action: string, params: Record<string, unknown>) {
   busy = true; availability(); notice('Connecting…', 'pending');
   try {
     const result = await request(action, params);
-    if (action === 'enrollment.connect' || action === 'free.connect' || action === 'api-key.connect') {
+    if (action === 'enrollment.connect' || action === 'free.connect' || action === 'api-key.connect' || action === 'google.connect') {
       freeRateLimited = false;
       apiKeyDialog?.close();
       choosingOrganization = false;

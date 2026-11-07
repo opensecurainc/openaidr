@@ -219,5 +219,31 @@
     "tests/test_publish_app_assets.py",
     "packages/ui/opensecura-mark.svg",
     "packages/ui/opensecura-mark-dark.svg"
+  ],
+  "partial_syncs": [
+    {
+      "source_repository": "opensecurainc/openaidr-internal",
+      "source_commit": "6513087b08f06d7205d3aad13cf0abeaa5dd2d9a",
+      "source_base_commit": "d3900b448ce739ebadc6f33557672dbbf0e88d67",
+      "target_base_commit": "91326037326ef6dc8989255c66060453d4154b9d",
+      "paths": [
+        "apps/desktop/CHANGELOG.md",
+        "apps/desktop/README.md",
+        "apps/desktop/src-tauri/src/links.rs",
+        "apps/desktop/src-tauri/src/main.rs",
+        "apps/desktop/src/credits.ts",
+        "apps/desktop/src/google-connection.ts",
+        "apps/desktop/src/main.ts",
+        "apps/desktop/src/style.css",
+        "apps/desktop/tests/enrollment.spec.ts",
+        "src/openaidr/core/desktop_credits.py",
+        "src/openaidr/sensor/bridge.py",
+        "src/openaidr/sensor/config.py",
+        "src/openaidr/sensor/desktop_credits.py",
+        "src/openaidr/sensor/google_connection.py",
+        "tests/test_desktop_credits.py",
+        "tests/test_google_connection.py"
+      ]
+    }
   ]
 }

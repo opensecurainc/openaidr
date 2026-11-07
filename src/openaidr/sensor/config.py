@@ -18,6 +18,7 @@ _config_lock = threading.RLock()
 _locked_paths = set()
 IDENTITY_FIELDS = (
     "connection_mode",
+    "google_account",
     "server_url",
     "sensor_id",
     "sensor_token",

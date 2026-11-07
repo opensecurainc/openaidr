@@ -136,6 +136,12 @@ enum Request {
     EnrollmentConnect { link: String, tenant_id: String, ca_certificate: Option<String> },
     #[serde(rename = "free.connect")]
     FreeConnect {},
+    #[serde(rename = "google.start")]
+    GoogleStart {},
+    #[serde(rename = "google.poll")]
+    GooglePoll {},
+    #[serde(rename = "google.connect")]
+    GoogleConnect {},
     #[serde(rename = "local-runtime.check")]
     LocalRuntimeCheck {},
     #[serde(rename = "local-runtime.docker-setup")]
@@ -289,6 +295,9 @@ impl Request {
             }
             Self::Setup {} => json!({"action":"desktop.update.setup"}),
             Self::FreeConnect {} => json!({"action":"free.connect"}),
+            Self::GoogleStart {} => json!({"action":"google.start"}),
+            Self::GooglePoll {} => json!({"action":"google.poll"}),
+            Self::GoogleConnect {} => json!({"action":"google.connect"}),
             Self::LocalRuntimeCheck {} => json!({"action":"local-runtime.check"}),
             Self::LocalRuntimeDockerSetup {} => json!({"action":"local-runtime.docker-setup"}),
             Self::LocalRuntimePrepare {} => json!({"action":"local-runtime.prepare"}),
@@ -954,6 +963,7 @@ async fn sensor_request(
         let _guard = lock_sensor(&state, preview)?;
         if let Some(progress) = &mut progress { progress.stage("locks"); }
         let is_status = payload["action"] == "status";
+        let google_start = payload["action"] == "google.start";
         let show_configuration = payload["action"] == "guardrails.configuration";
         let removing = payload["action"] == "desktop.remove";
         #[cfg(windows)]
@@ -986,7 +996,7 @@ async fn sensor_request(
         };
         check_preview(preview)?;
         if let Some(progress) = &mut progress { progress.stage("usage_shutdown"); }
-        if matches!(payload["action"].as_str(), Some("setup" | "desktop.update.setup" | "enrollment.connect" | "free.connect" | "api-key.connect" | "local-runtime.connect" | "desktop.resume" | "desktop.trash")) {
+        if matches!(payload["action"].as_str(), Some("setup" | "desktop.update.setup" | "enrollment.connect" | "free.connect" | "api-key.connect" | "google.connect" | "local-runtime.connect" | "desktop.resume" | "desktop.trash")) {
             usage::shutdown(&app);
         }
         if trashing {
@@ -1035,6 +1045,9 @@ async fn sensor_request(
         // sensor version supporting this app's removal protocol.
         let executable = if removing || resuming { bundled_binary(&app)? } else { stable_binary(&app)? };
         let mut response = bridge_pending(&executable, payload, preview)?;
+        if google_start && response["status"] == "pending" {
+            links::open_google(response["verification_uri"].as_str().ok_or("Invalid Google sign-in address.")?)?;
+        }
         if show_configuration {
             links::show_configuration(response["path"].as_str().ok_or("Missing configuration path.")?)?;
             return Ok(json!({}));

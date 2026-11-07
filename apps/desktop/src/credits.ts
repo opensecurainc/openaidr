@@ -1,6 +1,6 @@
-type Status = {connection_mode?:string; enrolled?:boolean; disabled?:boolean; desktop_removal?:unknown;tenant_name?:string; sensor_id?:string; server_url?:string};
+type Status = {connection_mode?:string; google_account?:{email:string}; enrolled?:boolean; disabled?:boolean; desktop_removal?:unknown;tenant_name?:string; sensor_id?:string; server_url?:string};
 type Usage = {status:'active'|'exhausted'|'disabled';allowance?:string|null;used:string|null;reserved?:string|null;available:string|null;starts_at:string|null;resets_at?:string|null;checked_at:string};
-type Snapshot = {sensor_id:string;server_url:string;plan:'free'|'paid';usage:Usage|null};
+type Snapshot = {sensor_id:string;server_url:string;plan:'free'|'paid';policy?:'anonymous_trial'|'google_weekly';usage:Usage|null};
 type Request = (action:string) => Promise<unknown>;
 
 function credits(value:unknown): bigint {
@@ -44,21 +44,24 @@ export function initCredits(parent:HTMLElement, request:Request, visible:() => b
       const value = await request('credits.summary') as Snapshot;
       if (current !== revision) return;
       if (!value || value.sensor_id !== status.sensor_id || value.server_url !== status.server_url?.replace(/\/$/, '')) throw new Error('Connection changed');
-      if (!['free', 'paid'].includes(value.plan) || (status.connection_mode === 'free' && value.plan !== 'free') || (status.connection_mode === 'api_key' && value.plan !== 'paid')) throw new Error('Invalid plan');
-      title(value.plan);
+      if (!['free', 'paid'].includes(value.plan) || (status.connection_mode === 'free' && value.plan !== 'free')
+          || (status.connection_mode === 'api_key' && value.plan !== 'paid' && !(status.google_account && value.policy === 'google_weekly'))
+          || (value.policy !== undefined && (!['anonymous_trial', 'google_weekly'].includes(value.policy) || value.plan !== 'free'))) throw new Error('Invalid plan');
+      title(value.plan, value.policy);
       const data = value.usage;
       if (data === null || data?.status === 'disabled') { clear('Credits are not enabled for this connection yet.'); return; }
       const checked = Date.parse(data.checked_at), age = Date.now() - checked;
       const free = value.plan === 'free';
+      const trial = value.policy === 'anonymous_trial';
       if (!['active','exhausted'].includes(data.status) || !Number.isFinite(checked) || age < -30000 || age > 180000) throw new Error('Invalid credit usage');
       const used = credits(data.used), remaining = credits(data.available);
       let total = 0n;
       if (free) {
         total = credits(data.allowance);
-        if (!(Date.parse(data.starts_at!) <= checked && checked < Date.parse(data.resets_at!)) || total <= 0n
+        if (!(Date.parse(data.starts_at!) <= checked) || (trial ? data.resets_at !== null : !(checked < Date.parse(data.resets_at!))) || (!trial && total <= 0n)
             || total !== used + credits(data.reserved) + remaining || (data.status === 'exhausted') !== (remaining === 0n)) throw new Error('Invalid free usage');
       } else if (Date.parse(data.starts_at!) !== Date.UTC(new Date(checked).getUTCFullYear(), new Date(checked).getUTCMonth(), 1)) throw new Error('Invalid paid period');
-      const expires = free ? Date.parse(data.resets_at!) : Date.UTC(new Date(checked).getUTCFullYear(), new Date(checked).getUTCMonth() + 1, 1);
+      const expires = trial ? Infinity : free ? Date.parse(data.resets_at!) : Date.UTC(new Date(checked).getUTCFullYear(), new Date(checked).getUTCMonth() + 1, 1);
       if (Date.now() >= expires) throw new Error('Credit period ended');
       el('message').hidden = true; el('data').hidden = false; el('metadata').hidden = false;
       const format = (value:string|null|undefined) => new Intl.NumberFormat(undefined, {maximumFractionDigits:6}).format(Number(value));
@@ -68,13 +71,14 @@ export function initCredits(parent:HTMLElement, request:Request, visible:() => b
       el('total').classList.toggle('credit-ratio', !free);
       el('total').title = free ? '' : `${format(data.used)} credits used this month (UTC); ${format(data.available)} credits available`;
       el('total').setAttribute('aria-label', el('total').title || `${format(data.used)} of ${format(data.allowance)} credits used`);
-      el('note').textContent = `${free ? 'Unused credits expire at the reset. ' : ''}Coding-agent tokens and costs are separate.`;
+      el('note').textContent = `${trial ? 'Starter credits do not renew. ' : free ? 'Unused credits expire at the reset. ' : ''}Coding-agent tokens and costs are separate.`;
       el('period').hidden = free;
       el('period').textContent = `Used this month (UTC): ${format(data.used)} settled credits.`;
-      el('reset').hidden = !free; el('reset-at').hidden = !free;
+      el('reset').hidden = !free; el('reset-at').hidden = !free || trial;
       const progress = el('progress') as HTMLProgressElement;
       progress.hidden = !free; progress.max = Number(total) || 1; progress.value = Number(used);
-      if (free) {
+      if (trial) el('reset').textContent = 'One-time starter credits. These do not renew.';
+      else if (free) {
         const hours = Math.max(0, Math.floor((Date.parse(data.resets_at!) - Date.now()) / 3600000)), days = Math.floor(hours / 24);
         const remainingTime = [days ? `${days} day${days === 1 ? '' : 's'}` : '', hours % 24 ? `${hours % 24} hour${hours % 24 === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
         el('reset').textContent = `Resets in ${remainingTime || 'less than 1 hour'}`;
@@ -90,13 +94,13 @@ export function initCredits(parent:HTMLElement, request:Request, visible:() => b
       if (current !== revision && active()) void refresh();
     }
   }
-  function title(plan?:'free'|'paid') {
+  function title(plan?:'free'|'paid', policy?:Snapshot['policy']) {
     const personal = status.connection_mode === 'free' || status.connection_mode === 'api_key';
     const selected = plan || (status.connection_mode === 'free' ? 'free' : status.connection_mode === 'api_key' ? 'paid' : null);
-    card.querySelector('#credit-title')!.textContent = personal ? selected === 'free' ? 'Free plan' : 'Personal · Paid' : `Enterprise${selected ? selected === 'free' ? ' · Free' : ' · Paid' : ''}`;
+    card.querySelector('#credit-title')!.textContent = personal ? policy === 'anonymous_trial' ? 'Starter credits' : policy === 'google_weekly' ? '200 free credits each week' : status.google_account ? 'Personal account' : selected === 'free' ? 'Free plan' : 'Personal · Paid' : `Enterprise${selected ? selected === 'free' ? ' · Free' : ' · Paid' : ''}`;
     const owner = card.querySelector<HTMLElement>('#credit-owner')!;
-    owner.hidden = personal;
-    owner.textContent = [status.tenant_name?.trim(), 'Shared organization credits'].filter(Boolean).join(' · ');
+    owner.hidden = personal && !status.google_account;
+    owner.textContent = status.google_account?.email || [status.tenant_name?.trim(), 'Shared organization credits'].filter(Boolean).join(' · ');
   }
   button.addEventListener('click', () => void refresh(true));
   el('toggle').addEventListener('click', () => {
@@ -109,10 +113,10 @@ export function initCredits(parent:HTMLElement, request:Request, visible:() => b
     setAvailability(value:boolean) { const changed = available !== value; available = value; button.disabled = !value || fetching; if (changed) { schedule(); if (active()) void refresh(); } },
     setStatus(value:Status) {
       status = value;
-      const next = value.enrolled && !value.disabled && !value.desktop_removal ? `${value.connection_mode}/${value.server_url}/${value.sensor_id}` : '';
+      const next = value.enrolled && !value.disabled && !value.desktop_removal ? `${value.connection_mode}/${value.server_url}/${value.sensor_id}/${value.google_account?.email || ''}` : '';
       if (identity !== next) { identity = next; revision++; lastAttempt = -Infinity; el('details').hidden = true; el('toggle').setAttribute('aria-expanded', 'false'); title(); clear('Loading credit usage…'); if (active()) void refresh(); }
       const owner = card.querySelector<HTMLElement>('#credit-owner')!;
-      owner.textContent = [status.tenant_name?.trim(), 'Shared organization credits'].filter(Boolean).join(' · ');
+      owner.textContent = status.google_account?.email || [status.tenant_name?.trim(), 'Shared organization credits'].filter(Boolean).join(' · ');
       card.hidden = !identity;
     },
   };

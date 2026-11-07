@@ -3,6 +3,20 @@ pub fn contact_support() -> Result<(), String> {
         "Could not open your email app. Email contact@opensecura.ai for support.")
 }
 
+fn google_url(value: &str) -> Result<&str, String> {
+    let id = value.strip_prefix("https://console.opensecura.ai/connect/?request=")
+        .ok_or("Invalid Google sign-in address.")?;
+    if id.len() != 36 || !id.bytes().enumerate().all(|(index, byte)| {
+        if matches!(index, 8 | 13 | 18 | 23) { byte == b'-' }
+        else { byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte) }
+    }) { return Err("Invalid Google sign-in address.".into()); }
+    Ok(value)
+}
+
+pub fn open_google(value: &str) -> Result<(), String> {
+    open_external(google_url(value)?, "Could not open your browser. Retry Google sign-in.")
+}
+
 pub fn open_dashboard(server_url: &str, local_session: impl FnOnce() -> Result<Option<(String, String)>, String>) -> Result<(), String> {
     let url = dashboard_url(server_url)?;
     if url.as_str() == "http://localhost:8080/" {
@@ -83,6 +97,16 @@ fn open_external(target: &str, error: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::dashboard_url;
+
+    #[test]
+    fn google_sign_in_opens_only_a_fixed_console_pairing_address() {
+        let good = "https://console.opensecura.ai/connect/?request=01000000-0000-7000-8000-000000000001";
+        assert_eq!(super::google_url(good).unwrap(), good);
+        for value in [good.replace("console.opensecura.ai", "other.example"), format!("{good}&token=secret"),
+                      good.replace("https:", "http:"), good.replace("/connect/", "/"), format!("{good}#secret")] {
+            assert!(super::google_url(&value).is_err());
+        }
+    }
 
     #[test]
     fn configuration_opens_only_the_parent_directory() {

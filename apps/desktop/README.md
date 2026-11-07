@@ -18,6 +18,35 @@ Individual service and agent controls remain in the CLI. The tenant dashboard
 runs separately. Linux servers can use the Python CLI and systemd without Node,
 Rust, or a desktop environment.
 
+The credit card reads the server's explicit allowance policy. Starter credits
+are a one-time grant and have no reset date. Google accounts show the weekly
+allowance, account email, and next reset. Legacy APIs retain their existing
+credit display until the new policy is activated. Deploy compatible desktop
+and SDK readers before activating lifetime allowances, because older readers
+require a reset date. Account allowance reads require the new API endpoint;
+an unavailable response shows an error rather than an invented balance.
+
+From the sensor status card, select **Sign in with Google to get 200 credits
+each week**. The system browser opens `https://console.opensecura.ai/`; sign in
+and confirm this device. The app polls its original free installation's request,
+verifies the new account credential, stops the sensor, and atomically changes its
+connection before restarting. Local usage, queues, and device identity remain.
+**Open console** returns to the account in the system browser.
+
+The native sensor stores a generated device key in its private data directory
+before sending its hash to the API. The browser receives only the pairing
+request ID. Retry reuses that exact key and request, including after a lost
+reply or hostname change. Approved receipts remain recoverable after the browser
+approval window ends. Cancelling in the app pauses polling; it does not delete
+the saved key or undo a browser approval. Start sign-in again to resume.
+An expired request is replaced only after the API confirms expiration.
+
+Deploy the API allowance and desktop-connection endpoints, then the console
+confirmation page, before releasing this desktop flow and enabling the backend
+policy. Rollback keeps account keys and local data. Do not restore anonymous
+credentials or delete the pairing file to work around a failed sign-in; retry
+the same request so the server can reconcile its existing approval.
+
 **Posture** shows this device's inventory with Overview, AI Apps, Supply Chain,
 and AI Skills pages. Review findings and
 collection details, search loaded records, or filter items needing attention.

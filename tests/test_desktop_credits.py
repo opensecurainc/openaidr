@@ -154,3 +154,33 @@ def test_paid_month_uses_utc_calendar_buckets_and_requires_complete_rated_data(m
         snapshot.series.pop()
         with pytest.raises(ValueError, match='Incomplete monthly credit buckets'):
             credits.paid_usage(snapshot)
+
+
+def test_starter_and_google_allowances_are_explicit_and_bound_to_saved_connection(tmp_path):
+    cfg = free_config(tmp_path)
+    value = dict(tenant_id=cfg['tenant_id'], plan='free', policy='anonymous_trial',
+                 usage={**free_usage(), 'resets_at': None})
+    remote = httpx.MockTransport(lambda request: httpx.Response(200, json=value))
+    result = desktop_credits.read(cfg, transport=remote)
+    assert result['policy'] == 'anonymous_trial' and result['usage']['resets_at'] is None
+    value['usage'].update(status='exhausted', allowance='0', used='0', reserved='0', available='0')
+    assert desktop_credits.read(cfg, transport=remote)['usage']['status'] == 'exhausted'
+    value.pop('policy')
+    with pytest.raises(ValueError, match='Credit usage is unavailable'):
+        desktop_credits.read(cfg, transport=remote)
+    cfg.update(connection_mode='api_key', google_account={'email': 'user@example.com'})
+    cfg.save()
+    value = dict(tenant_id=cfg['tenant_id'], policy='google_weekly', usage=free_usage())
+    calls = []
+    def account(request):
+        calls.append(request)
+        assert request.url.path == '/v1/credits/allowance'
+        assert request.headers['authorization'] == 'Bearer ' + cfg['sensor_token']
+        return httpx.Response(200, json=value)
+    result = desktop_credits.read(cfg, transport=httpx.MockTransport(account))
+    assert result['policy'] == 'google_weekly' and result['plan'] == 'free'
+    assert result['usage']['allowance'] == '200'
+    for bad in ({**value, 'tenant_id': str(uuid4())}, {**value, 'policy': 'anonymous_trial'},
+                {**value, 'usage': {**value['usage'], 'resets_at': None}}):
+        with pytest.raises(ValueError, match='Credit usage is unavailable'):
+            desktop_credits.read(cfg, transport=httpx.MockTransport(lambda request: httpx.Response(200, json=bad)))
