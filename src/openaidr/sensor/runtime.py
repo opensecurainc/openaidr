@@ -893,6 +893,12 @@ class Sensor:
                         "credential maintenance failed; existing queues and credentials retained: %s",
                         exc,
                     )
+            try:
+                # A hook shell can disappear or be blocked after setup.
+                hooks.remove_unstartable_workbuddy(hooks.settings_path("workbuddy", self.agent_homes()),
+                                                   self.config.path)
+            except Exception as exc:
+                logging.warning("WorkBuddy hook shell check failed: %s", exc)
             body = dict(
                 sensor_id=self.config["sensor_id"],
                 sensor_version=self.version,
