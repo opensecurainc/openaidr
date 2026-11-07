@@ -19,6 +19,7 @@ from .config import Config, capture_overrides, is_root
 from openaidr.core.files import atomic_write
 from openaidr.core.enrollment import validate_server_url
 from .tls import client_options, same_origin, validate_ca_certificate
+from . import network_proxy
 from . import hostinfo, hook_runtime, hooks, service
 from .collectors import Collector, Offsets
 from .spool import Spool
@@ -67,7 +68,7 @@ class HookClientPool:
         key = tuple(config.get(name) for name in (
             "server_url", "tenant_id", "sensor_id", "auth_mode", "sensor_token",
             "credential_generation", "ca_cert", "client_cert", "client_key",
-        ))
+        )) + (json.dumps(config.get("network"), sort_keys=True, default=str),)
         # Trust and key files can also be replaced at the same configured path.
         for name in ("ca_cert", "client_cert", "client_key"):
             path = config.get(name)
@@ -98,11 +99,11 @@ class HookClientPool:
                 if client is None:
                     # Loading certificate files must not hold up other replies
                     # or shutdown. Concurrent initializers share the first pool.
+                    limits = httpx.Limits(max_connections=HOOK_CONCURRENCY,
+                                          max_keepalive_connections=4, keepalive_expiry=120)
                     replacement = httpx.Client(
-                        timeout=HOOK_WORK_TIMEOUT_SECONDS,
-                        limits=httpx.Limits(max_connections=HOOK_CONCURRENCY,
-                                            max_keepalive_connections=4, keepalive_expiry=120),
-                        **client_options(config),
+                        timeout=HOOK_WORK_TIMEOUT_SECONDS, limits=limits,
+                        **client_options(config, limits=limits),
                     )
             if replacement is not None:
                 replacement.close()
@@ -209,6 +210,7 @@ class Client:
         client_key=None,
         tenant_id="",
         sensor_id="",
+        network=None,
     ):
         self.url = url.rstrip("/")
         self.lock = threading.RLock()
@@ -225,6 +227,7 @@ class Client:
                 client_key=client_key,
                 tenant_id=tenant_id,
                 sensor_id=sensor_id,
+                network=network,
             ),
             ca_certificate,
         )
@@ -251,6 +254,7 @@ class Client:
             client_key=config.get("client_key"),
             tenant_id=config.get("tenant_id", ""),
             sensor_id=config.get("sensor_id", ""),
+            network=config.get("network"),
         )
         client.credential_generation = config.get("credential_generation")
         return client
@@ -414,7 +418,8 @@ def enroll(
         else None
     )
     client = Client(
-        server, version=version, ca_cert=inherited_ca, ca_certificate=supplied_ca
+        server, version=version, ca_cert=inherited_ca, ca_certificate=supplied_ca,
+        network=config.get("network"),
     )
     try:
         response = client.post(
@@ -768,6 +773,7 @@ class Sensor:
             cloud_protection=cloud_protection(self.cloud_protection),
             ca_cert=self.config.get("ca_cert", ""),
             custom_ca=bool(self.config.get("ca_cert")),
+            network_proxy=network_proxy.public_status(self.config, check_password=False),
             hostname=self.host["hostname"],
             user=self.host["user"],
             device=self.device,

@@ -58,7 +58,8 @@ def certificates(tmp_path_factory):
         "-addext",
         "subjectKeyIdentifier=hash",
     )
-    for name, ip in [("correct", "127.0.0.1"), ("wrong", "192.0.2.25")]:
+    # "named" is reachable only through a test proxy that resolves openaidr.test.
+    for name, san in [("correct", "IP:127.0.0.1"), ("wrong", "IP:192.0.2.25"), ("named", "DNS:openaidr.test")]:
         run(
             "req",
             "-newkey",
@@ -72,8 +73,8 @@ def certificates(tmp_path_factory):
             "/CN=OpenAIDR Test Server",
         )
         (path / (name + ".ext")).write_text(
-            "subjectAltName=IP:"
-            + ip
+            "subjectAltName="
+            + san
             + "\nbasicConstraints=critical,CA:FALSE\nextendedKeyUsage=serverAuth\n"
             + "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n"
         )
@@ -263,7 +264,7 @@ def tls_servers(certificates, request, backend_hook):
             self.wfile.write(encoded)
 
     urls = {}
-    for name in ("correct", "wrong"):
+    for name in ("correct", "wrong", "named"):
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(
@@ -277,7 +278,8 @@ def tls_servers(certificates, request, backend_hook):
         thread.start()
         servers.append(server)
         threads.append(thread)
-        urls[name] = f"https://127.0.0.1:{server.server_port}"
+        host = "openaidr.test" if name == "named" else "127.0.0.1"
+        urls[name] = f"https://{host}:{server.server_port}"
     yield urls, requests
     for server in servers:
         server.shutdown()
@@ -600,6 +602,11 @@ def test_bridge_accepts_ca_pem_and_status_omits_contents(
     status = bridge.status(cfg)
     assert status["custom_ca"] and status["ca_cert"] == cfg["ca_cert"]
     assert "BEGIN CERTIFICATE" not in json.dumps(status)
+    # The desktop's connected status shows the saved proxy route.
+    assert status["network_proxy"] == {"mode": "default"}
+    cfg["network"] = {"proxy": {"mode": "manual", "url": "http://proxy.example:3128", "username": "svc"}}
+    assert bridge.status(cfg)["network_proxy"] == {
+        "mode": "manual", "url": "http://proxy.example:3128", "bypass": [], "username": "svc"}
 
 
 def mtls_config(tmp_path, certificates, url="https://127.0.0.1:1"):

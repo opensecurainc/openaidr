@@ -54,6 +54,9 @@ from .local_http import BoundedThreadingMixIn, HookAdmissionMixIn, LoopbackHTTPS
 from . import hook_runtime
 
 AGENTS = tuple(PRODUCTS)
+# Callers without a timeout owner get a decision only if evaluation finishes
+# within this grace after the check deadline (response formatting time).
+LEGACY_RESULT_GRACE_SECONDS = 0.05
 
 EVENTS = (
     "PreToolUse",
@@ -1405,22 +1408,12 @@ class HookServer:
             # response before the launcher's own fallback ends the wait.
             delivery_deadline_ns = deadline_ns - hook_runtime.RESPONSE_RESERVE_NS
             response_deadline = time.monotonic() + (delivery_deadline_ns - time.time_ns()) / 1e9
-            completed, result = threading.Event(), {}
-
-            def evaluate_in_background():
-                try:
-                    result.update(self._evaluate(
-                        p, product, begun, started_ns, execution_id, deadline,
-                        result_supported, path_home, timeout_owner, delivery_deadline_ns,
-                    ))
-                except Exception:
-                    pass
-                finally:
-                    completed.set()
-
-            threading.Thread(target=evaluate_in_background, daemon=True).start()
-            if completed.wait(max(0, response_deadline - time.monotonic())) and time.monotonic() < response_deadline:
-                return result or {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
+            result = self._within(response_deadline, lambda: self._evaluate(
+                p, product, begun, started_ns, execution_id, deadline,
+                result_supported, path_home, timeout_owner, delivery_deadline_ns,
+            ))
+            if result is not None:
+                return result
             if self.disconnected:
                 try:
                     self.disconnected({"hook": {
@@ -1429,8 +1422,40 @@ class HookServer:
                 except Exception:
                     pass
             return {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
+        if timeout_owner not in ("agent", "sensor"):
+            # Transport timeouts apply per phase (connect, proxy CONNECT, TLS,
+            # read), so a slow peer can exceed this budget several times over.
+            # Bound the caller's wait by wall clock. A late evaluation is still
+            # recorded but can never restrict the action.
+            result = self._within(deadline + LEGACY_RESULT_GRACE_SECONDS, lambda: self._evaluate(
+                p, product, begun, started_ns, execution_id, deadline,
+                result_supported, path_home, timeout_owner, deadline_ns,
+            ))
+            return result or {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
         return self._evaluate(p, product, begun, started_ns, execution_id, deadline,
                               result_supported, path_home, timeout_owner, deadline_ns)
+
+    @staticmethod
+    def _within(response_deadline, work):
+        """Run ``work`` in the background and wait for it until ``response_deadline``.
+
+        Returns its result (a failed allow if it raised), or ``None`` when the
+        deadline passed first. The work keeps running so its outcome is recorded.
+        """
+        completed, result = threading.Event(), {}
+
+        def run():
+            try:
+                result.update(work())
+            except Exception:
+                pass
+            finally:
+                completed.set()
+
+        threading.Thread(target=run, daemon=True).start()
+        if completed.wait(max(0, response_deadline - time.monotonic())) and time.monotonic() < response_deadline:
+            return result or {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
+        return None
 
     def _evaluate(self, p, product, begun=None, started_ns=None, execution_id=None,
                   deadline=None, result_supported=False, path_home=None,

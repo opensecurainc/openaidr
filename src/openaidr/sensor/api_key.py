@@ -63,6 +63,10 @@ def activate(config, api_key, *, transport=None):
         config = Config.load(config.path)
         if config.enrolled() and (config.get("connection_mode") != "api_key" or config.get("sensor_token") != api_key):
             raise ValueError("This device is already connected. Keep its existing connection.")
+        if transport is None:
+            from . import network_proxy
+
+            transport = network_proxy.async_transport(config, ORIGIN)
         try:
             verified = asyncio.run(verify(api_key, transport, config.get("tenant_id") if config.enrolled() else None))
             bound = Connection(ORIGIN, api_key, verified.tenant_id)

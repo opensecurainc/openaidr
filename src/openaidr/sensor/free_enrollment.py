@@ -86,6 +86,10 @@ def connect(config, *, transport=None):
     with configuration_lock(config.path):
         config = Config.load(config.path)
         enrollment = prepare(config)
+        if transport is None:
+            from . import network_proxy
+
+            transport = network_proxy.async_transport(config, ORIGIN)
         try:
             status = asyncio.run(enrollment.verify(transport=transport))
         except Unavailable as exc:
