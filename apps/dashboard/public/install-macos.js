@@ -33,9 +33,9 @@ function install(mac, mdm) {
     if (!mdm && root) {
         throw new Error("Run this script as your normal macOS account, without sudo.");
     }
-    if (mac.exec("/usr/sbin/sysctl", ["-n", "hw.optional.arm64"]).trim() !== "1" ||
-        parseInt(mac.exec("/usr/bin/sw_vers", ["-productVersion"]), 10) < 12) {
-        throw new Error("OpenAIDR requires macOS 12 or later on an Apple Silicon Mac.");
+    // The installer is one universal app for Apple Silicon and Intel Macs.
+    if (parseInt(mac.exec("/usr/bin/sw_vers", ["-productVersion"]), 10) < 12) {
+        throw new Error("OpenAIDR requires macOS 12 (Monterey) or later.");
     }
     if (mdm) mac.useConsoleUser(uid);
     if (mdm && mac.exists(mac.home + "/Library/Application Support/OpenAIDR/desktop-removal.json")) {

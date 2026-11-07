@@ -26,10 +26,15 @@ export function CompanyKnowledgePreview({
     const controller = new AbortController();
     setError("");
     fetch(src, { signal: controller.signal, cache: "no-store" })
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok)
           throw new Error(`The preview could not be loaded (HTTP ${response.status}).`);
-        return response.text();
+        const preview = new DOMParser().parseFromString(await response.text(), "text/html");
+        const base = preview.createElement("base");
+        // srcDoc otherwise resolves relative assets against the dashboard route.
+        base.href = response.url;
+        preview.head.prepend(base);
+        return `<!doctype html>\n${preview.documentElement.outerHTML}`;
       })
       .then(setHtml)
       .catch((reason: unknown) => {

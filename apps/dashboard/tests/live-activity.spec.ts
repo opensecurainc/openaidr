@@ -2459,7 +2459,9 @@ test("the Company Policy and Guardrail Configuration previews are not loaded bef
   expect(previews).toEqual([]);
 });
 
-test("the view switch moves between Company Policy and Knowledge and its layout previews", async ({ page }) => {
+test("the view switch moves between Company Policy and Knowledge and loads its preview fonts", async ({ page }) => {
+  const browserErrors: string[] = [];
+  page.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
   await mockApi(page, () => ({ items: [], cursor: "", more: false }), []);
   await page.goto("/company-knowledge");
   const views = page.getByRole("navigation", { name: "Company Policy and Knowledge view" });
@@ -2468,14 +2470,19 @@ test("the view switch moves between Company Policy and Knowledge and its layout 
   await expect(page).toHaveURL(/\/company-knowledge\/preview\/policy$/);
   await expect(views.getByRole("link", { name: "Policy preview" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator('iframe[title="Company Policy preview with sample data"]')).toBeVisible();
+  await expect.poll(() => page.frameLocator('iframe[title="Company Policy preview with sample data"]').locator("body")
+    .evaluate(async () => (await document.fonts.load('16px "Geist Sans"')).length)).toBeGreaterThan(0);
   await views.getByRole("link", { name: "Guardrail preview" }).click();
   await expect(page).toHaveURL(/\/company-knowledge\/preview\/guardrails$/);
   await expect(views.getByRole("link", { name: "Guardrail preview" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator('iframe[title="Guardrail Configuration preview with sample data"]')).toBeVisible();
+  await expect.poll(() => page.frameLocator('iframe[title="Guardrail Configuration preview with sample data"]').locator("body")
+    .evaluate(async () => (await document.fonts.load('16px "Geist Sans"')).length)).toBeGreaterThan(0);
   await views.getByRole("link", { name: "Current" }).click();
   await expect(page).toHaveURL(/\/company-knowledge$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Company Policy and Knowledge");
   await expect(page.locator("iframe")).toHaveCount(0);
+  expect(browserErrors).toEqual([]);
 });
 
 test("the Guardrail Configuration preview drafts and adds a guardrail with sample data and no tenant reads", async ({ page }, info) => {

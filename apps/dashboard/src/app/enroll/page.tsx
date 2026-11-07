@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { buttonVariants } from "@/components/ui/button";
 import { PageNotice } from "@/components/page-layout";
-import { type DesktopPlatform, LATEST_INSTALLERS, detectDesktopPlatform, installerUrl } from "@/lib/desktop-downloads";
+import { type DesktopPlatform, LATEST_INSTALLERS, desktopInstallerUrl, detectDesktopPlatform, installerUrl } from "@/lib/desktop-downloads";
 
 // Installer locations are deployment settings, read when the page is requested.
 export const dynamic = "force-dynamic";
@@ -21,12 +21,20 @@ function platformGuides(): Record<DesktopPlatform, PlatformGuide> {
     mac: {
       label: "Mac",
       installers: [
-        { name: "Apple Silicon", url: installerUrl(process.env.OPENAIDR_DESKTOP_MAC_ARM64_URL, LATEST_INSTALLERS.macArm64) },
+        { name: "Mac", url: installerUrl(process.env.OPENAIDR_DESKTOP_MAC_ARM64_URL, LATEST_INSTALLERS.macArm64) },
       ],
-      before: (
+      before: desktopInstallerUrl(process.env.OPENAIDR_DESKTOP_MAC_ARM64_URL) ? (
+        // An administrator-approved installer may be an older Apple Silicon-only release.
         <>
-          OpenAIDR requires an Apple Silicon Mac. Intel Macs are not supported.
-          Choose Apple menu &gt; About This Mac and check that it lists an Apple chip.
+          OpenAIDR requires macOS 12 (Monterey) or later. Your administrator chose
+          this installer; if it does not open on an Intel Mac, ask them for a current release.
+        </>
+      ) : (
+        // The public release is verified universal before publication.
+        <>
+          OpenAIDR requires macOS 12 (Monterey) or later. The installer works on
+          Apple Silicon and Intel Macs. Choose Apple menu &gt; About This Mac to
+          check your macOS version.
         </>
       ),
       after: (

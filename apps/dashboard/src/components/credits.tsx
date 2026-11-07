@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useDashboard } from "@/components/dashboard-context";
 import { ChartReadout, TimeAxisTick } from "@/components/chart-readout";
@@ -75,11 +76,18 @@ export function Credits() {
   const { user } = useDashboard();
   const { dateTime } = useTimeZone();
   const [range, setRange] = useState("24h");
+  const [sort, setSort] = useState<{ key: "operations" | "credits_charged"; order: "asc" | "desc" }>({ key: "credits_charged", order: "desc" });
   const resource = useResource<CreditSnapshot>(user ? `credits?range=${range}` : null, 30000, false, { validate: validCreditSnapshot });
   const data = resource.data && validCreditSnapshot(resource.data) && resource.data.tenant_id === user?.tenant.id ? resource.data : null;
   const invalid = resource.data !== null && data === null;
   const status = data && data.status !== "active" ? statusText[data.status] : null;
   const showUsage = data && (["active", "exhausted"].includes(data.status) || data.summary.operations > 0 || data.summary.credits_charged !== null);
+  const services = [...(data?.by_service ?? [])].sort((a, b) => {
+    const left = a[sort.key], right = b[sort.key];
+    if (left === null) return right === null ? 0 : 1;
+    if (right === null) return -1;
+    return (Number(left) - Number(right)) * (sort.order === "asc" ? 1 : -1);
+  });
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div role="group" aria-label="Credit time range" className="flex gap-1 rounded-md bg-muted p-1">
@@ -108,8 +116,14 @@ export function Credits() {
       </PageSection>
       {showUsage && data.by_service.length > 0 && <PageSection title="Usage by feature">
         <TableLayout><Table aria-label="Credit usage by feature"><TableHeader><TableRow>
-          <TableHead>Feature</TableHead><TableHead className="text-right">Operations</TableHead><TableHead className="text-right">Credits used</TableHead>
-        </TableRow></TableHeader><TableBody>{data.by_service.map(row => <TableRow key={row.service}>
+          <TableHead>Feature</TableHead>
+          {([["operations", "Operations"], ["credits_charged", "Credits used"]] as const).map(([key, label]) => <TableHead key={key} className="text-right" aria-sort={sort.key === key ? (sort.order === "desc" ? "descending" : "ascending") : "none"}>
+            <button type="button" className="inline-flex min-h-8 items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => setSort({ key, order: sort.key === key && sort.order === "desc" ? "asc" : "desc" })}>
+              {label}
+              {sort.key !== key ? <ArrowUpDown className="size-3" aria-hidden="true" /> : sort.order === "desc" ? <ArrowDown className="size-3" aria-hidden="true" /> : <ArrowUp className="size-3" aria-hidden="true" />}
+            </button>
+          </TableHead>)}
+        </TableRow></TableHeader><TableBody>{services.map(row => <TableRow key={row.service}>
           <TableCell className="font-medium">{creditServices[row.service]}</TableCell><TableCell className="number text-right">{number(row.operations)}</TableCell>
           <TableCell className="number text-right">{creditAmount(row.credits_charged)}</TableCell>
         </TableRow>)}</TableBody></Table></TableLayout>
