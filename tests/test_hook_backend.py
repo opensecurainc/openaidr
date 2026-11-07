@@ -215,6 +215,42 @@ def test_caller_deadline_reserves_delivery_and_discards_late_decisions(tmp_path,
         assert bool(result["output"]) == (action == "deny")
 
 
+@pytest.mark.parametrize("action", ["allow", "deny"])
+@pytest.mark.parametrize("delay", [0.2, 2.6])
+def test_legacy_caller_wait_is_bounded_by_wall_clock(tmp_path, backend_hook, action, delay):
+    # Transport timeouts apply per phase, so a slow proxy CONNECT followed by a
+    # slow reply can outlast the budget. Callers without a timeout owner still
+    # get a silent allow by their deadline; the late evaluation is recorded as
+    # expired and never applied. A timely decision, including deny, still applies.
+    reply = backend_hook(action=action)
+    emitted, recorded = [], threading.Event()
+
+    def emit(event):
+        emitted.append(event)
+        if event["kind"] == "hook.decision":
+            recorded.set()
+
+    def check(request, deadline):
+        time.sleep(delay)
+        return reply(request, deadline)
+
+    server = hooks.HookServer("127.0.0.1:0", tmp_path / "sock", emit, lambda: {}, {}, check=check)
+    started = time.monotonic()
+    result = server.evaluate({"session_id": "s", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                              "tool_input": {"command": "ls"}})
+    elapsed = time.monotonic() - started
+    if delay < 1:
+        assert result["decision"] == action and not result.get("failed")
+        assert bool(result["output"]) == (action == "deny")
+        return
+    assert result == {"decision": "allow", "claude_code": {}, "output": {}, "failed": True}
+    assert elapsed < 1.8 + hooks.LEGACY_RESULT_GRACE_SECONDS + 0.2
+    assert recorded.wait(3)
+    decision, = [e for e in emitted if e["kind"] == "hook.decision"]
+    assert decision["hook"]["decision"] == "allow"
+    assert decision["hook"]["failure_reason"] == "deadline_expired"
+
+
 @pytest.mark.parametrize("event,category", [("PreToolUse", "tool_input"), ("UserPromptSubmit", "prompt_text"), ("PostToolUse", "tool_output")])
 @pytest.mark.parametrize("restriction", ["disabled", "redacted", "truncated", "none"])
 def test_remote_capture_sends_permitted_evidence_with_explicit_gaps(event, category, restriction):
@@ -514,11 +550,11 @@ def test_hook_pool_rotates_without_blocking_other_hooks(pooled_hook_backend, mon
     setup_entered, setup_release = threading.Event(), threading.Event()
     client_options = runtime.client_options
 
-    def options(config):
+    def options(config, **kwargs):
         if slow_setup and config.get("sensor_token") == "new-token":
             setup_entered.set()
             setup_release.wait(3)
-        return client_options(config)
+        return client_options(config, **kwargs)
 
     monkeypatch.setattr(runtime, "client_options", options)
     # Neither hook may wait for the heartbeat client's lock or the slow reply.

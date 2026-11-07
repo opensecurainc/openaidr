@@ -13,6 +13,7 @@ export default defineConfig(({ command }) => {
     'import.meta.env.VITE_BUILD_VERSION':JSON.stringify(info.version),
     'import.meta.env.VITE_BUILD_COMMIT':JSON.stringify(info.source_commit),
     'import.meta.env.VITE_BUILD_TIME':JSON.stringify(info.built_at),
+    'import.meta.env.VITE_ENTERPRISE_ONLY':JSON.stringify(info.desktop_edition === 'enterprise'),
   },
   };
 });

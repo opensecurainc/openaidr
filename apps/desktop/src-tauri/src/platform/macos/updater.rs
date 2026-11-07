@@ -123,6 +123,10 @@ pub fn restart_after_update(app: &AppHandle) -> bool {
 }
 
 pub fn initialize(app: &AppHandle, mode: Mode) {
+    if mode == Mode::Window && removal_supported() {
+        // Failed validation keeps the removal barrier and its manual recovery UI.
+        let _ = macos::directory(app).and_then(|directory| macos::clear_deleted_removal(&directory, mode));
+    }
     if enabled(app.config()) {
         macos::initialize(app.clone(), mode);
         return;
@@ -729,6 +733,28 @@ mod macos {
             .map_err(|_| "Cannot clear the removal record. Retry setup.".into())
     }
 
+    pub(super) fn clear_deleted_removal(directory: &Path, mode: Mode) -> Result<(), String> {
+        let marker = directory.join("desktop-removal.json");
+        if mode != Mode::Window || !marker.exists() {
+            return Ok(());
+        }
+        let _updater = lock_file(directory, "desktop-updater.lock")?;
+        let _operation = lock(directory)?;
+        reject_links(&marker)?;
+        let saved = read_removal_status(&marker);
+        if saved["state"] != "complete" || !saved["errors"].as_array().is_some_and(Vec::is_empty)
+            || saved["data_deletion_started"] != true || saved["data_deleted"] != true {
+            return Ok(());
+        }
+        // A completed purge has no configuration to restore. A later window
+        // launch starts fresh, while the uninstalling process stays stopped.
+        match fs::symlink_metadata(directory.join("sensor.yaml")) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+            _ => return Ok(()),
+        }
+        fs::remove_file(marker).map_err(|_| "Cannot clear the removal record. Retry setup.".into())
+    }
+
     pub(super) fn prepare_removal(app: &AppHandle) -> Result<(), String> {
         let directory = directory(app)?;
         let marker = directory.join("desktop-removal.json");
@@ -934,7 +960,9 @@ mod macos {
         fs::create_dir(&staged).map_err(|_| "Cannot create the staged application.")?;
         let current = installed.version.clone();
         let publication = installed.build["publication_timestamp"].as_i64().unwrap_or(0);
-        let updater = app
+        // The selected proxy also carries the archive download (update.proxy).
+        let proxy = super::super::update_download::release_proxy(crate::bundled_binary(app).ok(), ENDPOINT).await;
+        let mut builder = app
             .updater_builder()
             .endpoints(vec![ENDPOINT.parse().unwrap()])
             .map_err(|_| "The update endpoint is invalid.")?
@@ -953,7 +981,11 @@ mod macos {
                     .danger_accept_invalid_certs(false)
                     .danger_accept_invalid_hostnames(false)
                     .connect_timeout(Duration::from_secs(15))
-            })
+            });
+        if let Some(proxy) = proxy {
+            builder = builder.proxy(proxy);
+        }
+        let updater = builder
             .build()
             .map_err(|_| "Cannot initialize signed updates.")?;
         let lookup = state.check_health.check(&updater, timestamp());
@@ -1395,6 +1427,63 @@ mod macos {
             assert!(source_gone);
             assert!(moved_bundle);
             assert_eq!(fs::read_to_string(&data).unwrap(), "retained records");
+        }
+
+        #[test]
+        fn fresh_launch_clears_only_completed_data_deletion() {
+            let scratch = tempfile::tempdir().unwrap();
+            let root = scratch.path().canonicalize().unwrap();
+            let marker = root.join("desktop-removal.json");
+            let deleted = json!({"state":"complete", "errors":[], "preferences":{"hooks":[],"telemetry":[]},
+                "data_deletion_started":true, "data_deleted":true});
+            for mode in [Mode::Check, Mode::Finish, Mode::Window] {
+                fs::write(&marker, serde_json::to_vec(&deleted).unwrap()).unwrap();
+                clear_deleted_removal(&root, mode).unwrap();
+                assert_eq!(marker.exists(), mode != Mode::Window);
+                assert!(!root.join("sensor.yaml").exists());
+            }
+            for (field, value) in [("state", json!("pending")), ("errors", json!(["Cleanup failed"])),
+                ("data_deletion_started", json!(false)), ("data_deleted", json!(false)),
+                ("data_deleted", Value::Null), ("preferences", Value::Null)] {
+                let mut saved = deleted.clone();
+                saved[field] = value;
+                let bytes = serde_json::to_vec(&saved).unwrap();
+                fs::write(&marker, &bytes).unwrap();
+                clear_deleted_removal(&root, Mode::Window).unwrap();
+                assert_eq!(fs::read(&marker).unwrap(), bytes);
+            }
+            fs::write(&marker, b"damaged record").unwrap();
+            clear_deleted_removal(&root, Mode::Window).unwrap();
+            assert_eq!(fs::read(&marker).unwrap(), b"damaged record");
+        }
+
+        #[test]
+        fn fresh_launch_preserves_configuration_and_active_removal_locks() {
+            let scratch = tempfile::tempdir().unwrap();
+            let root = scratch.path().canonicalize().unwrap();
+            let marker = root.join("desktop-removal.json");
+            let config = root.join("sensor.yaml");
+            let bytes = br#"{"state":"complete","errors":[],"preferences":{"hooks":[],"telemetry":[]},"data_deletion_started":true,"data_deleted":true}"#;
+            fs::write(&marker, bytes).unwrap();
+            fs::write(&config, "retained configuration").unwrap();
+            clear_deleted_removal(&root, Mode::Window).unwrap();
+            assert_eq!(fs::read(&marker).unwrap(), bytes);
+            assert_eq!(fs::read_to_string(&config).unwrap(), "retained configuration");
+            fs::remove_file(&config).unwrap();
+            symlink(root.join("missing.yaml"), &config).unwrap();
+            clear_deleted_removal(&root, Mode::Window).unwrap();
+            assert_eq!(fs::read(&marker).unwrap(), bytes);
+            fs::remove_file(&config).unwrap();
+            for name in ["desktop-updater.lock", "desktop-operation.lock"] {
+                let _guard = lock_file(&root, name).unwrap();
+                assert!(clear_deleted_removal(&root, Mode::Window).is_err());
+                assert_eq!(fs::read(&marker).unwrap(), bytes);
+            }
+            let target = root.join("saved-removal.json");
+            fs::rename(&marker, &target).unwrap();
+            symlink(&target, &marker).unwrap();
+            assert!(clear_deleted_removal(&root, Mode::Window).is_err());
+            assert_eq!(fs::read(&target).unwrap(), bytes);
         }
 
         #[test]

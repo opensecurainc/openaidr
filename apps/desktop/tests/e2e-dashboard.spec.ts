@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from './fixtures';
 import {createServer} from 'node:http';
 import {dashboardLoad, dashboardRoutes} from '../e2e/dashboard';
 

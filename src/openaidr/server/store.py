@@ -23,11 +23,17 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool, PoolTimeout, TooManyRequests
 from openaidr.core.event import validate_evidence
 from . import _sql as sql
+from .config import PLATFORM_AVAILABLE
 from .model import finish, SEVERITIES
 from .permissions import LEGACY_ROLES, normalize_roles
 from .telemetry_events import translate_export
 from .query_sources import QuerySources, SourceCursor
 from .config import PLATFORM_AVAILABLE
+
+if PLATFORM_AVAILABLE:
+    from openaidr.platform.storage import PlatformStore
+else:
+    PlatformStore = object
 
 if PLATFORM_AVAILABLE:
     from openaidr.platform.storage import PlatformStore

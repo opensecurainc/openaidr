@@ -1,10 +1,11 @@
-import { test, expect, type Page, type Locator } from '@playwright/test';
+import { test, expect, type Page, type Locator } from './fixtures';
 import config from '../src-tauri/tauri.conf.json' with {type:'json'};
 import {NativeUI} from '../e2e/native-ui';
 import {exerciseAppControls} from '../e2e/native-flows';
 import {execFileSync, spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {createServer} from 'node:http';
+import {readFileSync} from 'node:fs';
 
 const link = 'https://tenant.example/enroll#token=oaet_' + 'a'.repeat(43);
 const preview = {server_url:'https://tenant.example',tenant:{id:'01000000-0000-7000-8000-000000000001',name:'Example organization'},auth_mode:'bearer',expires_at:'2099-01-01T00:00:00Z'};
@@ -16,6 +17,7 @@ const certificate = '-----BEGIN CERTIFICATE-----\nY2VydGlmaWNhdGU=\n-----END CER
 
 type AlertFixture = {id:string;title:string;message:string;command:string;installed_version:string;required_version:string;sender_name:string;created_at:string;expires_at:string;received_at:string|null;acknowledged_at:string|null};
 type Mock = {
+  proxy?: {status:Record<string, unknown>; test?:{ok:boolean;message:string}; saveError?:string};
   localRuntime?: {docker_ready:boolean;docker_action?:'install'|'start'|'manual';existing:boolean;managed:boolean;connected:boolean;server_url:string};
   localDockerError?: string;
   localRuntimeError?: string;
@@ -137,6 +139,18 @@ async function boot(page: Page, mock: Mock) {
         (window as unknown as {removalProgress?:(stage:string) => void}).removalProgress = stage => channel?.onmessage({stage,event:'start'});
       }
       if (action === 'alerts.focus') return;
+      if (action === 'proxy.status') return structuredClone(win.mock.proxy?.status ?? {mode:'default'});
+      if (action === 'proxy.test') return win.mock.proxy?.test ?? {ok:true,message:'Reached the OpenAIDR server through the proxy in 84 ms.'};
+      if (action === 'proxy.save') {
+        if (win.mock.proxy?.saveError) throw new Error(win.mock.proxy.saveError);
+        const {action:_action, password, ...rest} = args.request as unknown as Record<string, unknown>;
+        const keep = (win.mock.proxy?.status as {password_saved?:boolean} | undefined)?.password_saved;
+        const saved = {...rest, ...(rest.username ? {password_saved:!!password || !!keep} : {})};
+        win.mock.proxy = {...win.mock.proxy, status:saved};
+        const {password_saved:_saved, ...visible} = saved as Record<string, unknown>;
+        win.mock.status = {...win.mock.status, network_proxy:visible};
+        return saved;
+      }
       if (action === 'alerts.list') {
         if (win.mock.alertsError) throw new Error(win.mock.alertsError);
         return {supported:win.mock.alerts !== undefined,scope:'a'.repeat(64),sensor_id:win.mock.status.sensor_id,server_url:win.mock.status.server_url,items:structuredClone(win.mock.alerts ?? [])};
@@ -302,7 +316,7 @@ async function boot(page: Page, mock: Mock) {
   }, mock);
   await page.goto('/');
   // Enrollment-form cases take the organization path; onboarding cases keep both choices.
-  if (mock.status.enrolled === false && !mock.setupChoices && !mock.statusError && mock.pendingAction !== 'status') {
+  if (process.env.OPENAIDR_DESKTOP_EDITION !== 'enterprise' && mock.status.enrolled === false && !mock.setupChoices && !mock.statusError && mock.pendingAction !== 'status') {
     await page.getByRole('button', {name:'Connect organization',exact:true}).click();
   }
 }
@@ -943,11 +957,12 @@ test('Denied checks preserve existing labels and notes until a user reports a mi
   }
 });
 
-test('native control flow selects Guardrails buttons separately from Usage icons', async ({page}) => {
+for (const profiles of [false, true]) test(`native control flow selects Guardrails buttons separately from Usage icons ${profiles ? 'with Codex profiles' : 'with legacy status'}`, async ({page}) => {
   test.slow();
   const status = {...converged,control_ready:true,heartbeat:{last_success_at:new Date().toISOString()},
     telemetry:{...converged.telemetry,codex_available:true,codex_installed:true,codex_current:true,claude_available:false},
     hooks:{codex:guardrailStatus().hooks.codex}};
+  if (profiles) Object.assign(status.hooks.codex, {profiles:[{...status.hooks.codex,name:'.codex'}]});
   const activity = guardrailActivity();
   activity.recent[0].product = 'codex-cli';
   await boot(page, {status,usage:populatedUsage(),guardrails:activity,maxWindowHeight:720,
@@ -963,6 +978,8 @@ test('native control flow selects Guardrails buttons separately from Usage icons
     sensorStatus:() => page.evaluate(() => (window as unknown as {mock:Mock}).mock.status)});
   await native.healthy();
   expect((await requests(page)).filter(row => row.action === 'guardrails.configure').map(row => row.enabled)).toEqual([false,true,true]);
+  expect((await requests(page)).filter(row => row.action === 'guardrails.configure').map(row => row.profile)).toEqual(
+    Array(3).fill(profiles ? status.hooks.codex.config_path : undefined));
   await expect(page.locator('#usage-panel')).toBeVisible();
 });
 
@@ -976,6 +993,10 @@ for (const maxWindowHeight of [720,320]) {
     await page.getByRole('group', {name:'Usage period',exact:true}).getByRole('button',{name:'24 hours'}).click();
     await page.getByRole('tab', {name:'Guardrails',exact:true}).click();
     await expect(page.locator('#usage-panel')).toBeHidden();
+    const heading = page.locator('#guardrails-page .usage-heading');
+    await expect(heading.getByRole('heading', {name:'Guardrails',exact:true})).toBeInViewport({ratio:1});
+    await expect(heading.getByText('This device', {exact:true})).toHaveCount(0);
+    await expect(heading.getByRole('group', {name:'Guardrail period',exact:true})).toBeInViewport({ratio:1});
     await expect(page.locator('#guardrails-completed')).toHaveText('1,240');
     await expect(page.locator('#guardrails-deny-label')).toHaveText('Would deny');
     await expect(page.locator('#guardrails-exceptions')).toHaveText('3 checks unavailable');
@@ -1310,7 +1331,7 @@ for (const label of ['Show in menu bar', 'Show in system tray']) for (const maxW
         doneBelowConnection:done.top > connection.bottom,
       };
     })).toEqual({connectBelowLink:true,doneBelowConnection:true});
-    await expect(dialog.locator('#settings-actions button')).toHaveText(['Done']);
+    await expect(dialog.locator('#settings-actions button')).toHaveText(['Network proxy', 'Done']);
     expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     if (maxWindowHeight === 720) expect(await dialog.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
     await dialog.getByRole('button', {name:'Done',exact:true}).focus();
@@ -2491,7 +2512,7 @@ async function expectControlHierarchy(page: Page) {
     const close = ['close-status','close-connection','close-update','close-about','simulation-dismiss'].includes(element.id);
     const creditDisclosure = element.matches('.credit-disclosure, #sensor-details > summary');
     const disclosure = creditDisclosure || element.matches('summary');
-    const secondary = ['back-to-choices','choose-organization','choose-local-runtime','local-back','local-check','local-credentials','local-done','change-connection','remove-app','check-update','show-about','update-secondary','cancel-change','remove-certificate','cancel-remove','resume-app','show-simulation','simulation-close'].includes(element.id);
+    const secondary = ['settings-proxy','back-to-choices','choose-organization','choose-local-runtime','local-back','local-check','local-credentials','local-done','change-connection','remove-app','check-update','show-about','update-secondary','cancel-change','remove-certificate','cancel-remove','resume-app','show-simulation','simulation-close'].includes(element.id);
     const destructive = element.id === 'trash-app' || (element.id === 'confirm-remove' && /^(Uninstall|Delete)/.test(element.textContent || ''));
     const background = close || disclosure ? 'rgba(0, 0, 0, 0)' : secondary ? (dark ? 'rgb(15, 29, 56)' : 'rgb(247, 248, 250)') : destructive ? 'rgb(135, 36, 32)' : 'rgb(23, 55, 111)';
     const color = creditDisclosure ? (dark ? 'rgb(111, 155, 230)' : 'rgb(23, 55, 111)') : close || disclosure ? (dark ? 'rgb(154, 166, 184)' : 'rgb(90, 99, 114)') : secondary ? (dark ? 'rgb(230, 234, 241)' : 'rgb(28, 34, 48)') : 'rgb(255, 255, 255)';
@@ -4887,6 +4908,8 @@ for (const maxWindowHeight of [720,240]) {
       win.completeRequest();
     });
     await expect(page.locator('#health-title')).toHaveText('Welcome to OpenAIDR');
+    await expect(page.locator('#resume-app')).toBeHidden();
+    expect((await requests(page)).some(request => request.action === 'desktop.resume')).toBe(false);
     // Let ResizeObserver process the new content while fitting is suspended.
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await page.evaluate(() => {
@@ -7593,12 +7616,12 @@ for (const maxWindowHeight of [720,320]) {
     const progress = page.locator('#local-progress');
     await expect(progress.locator('.active')).toHaveText('Prepare Docker');
     const app = page.locator('#app');
-    expect(await app.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await expect.poll(() => app.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     if (maxWindowHeight === 720) {
-      expect(await app.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
+      await expect.poll(() => app.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
       await expect(progress).toBeInViewport({ratio:1});
     } else {
-      expect(await app.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+      await expect.poll(() => app.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
       await progress.scrollIntoViewIfNeeded();
       await expect(progress).toBeInViewport({ratio:1});
     }
@@ -7729,7 +7752,7 @@ test('closing Settings dismisses local setup and permits opening it again', asyn
 
 function postureFixture(local = false) {
   const item = (id:string,name:string,kind:string,attention = false) => ({id,name,kind,source:'Organization inventory',path:`/Users/example/Projects/website/${id}`,
-    version:'1.2.3',publisher:'Publisher',scope:'User',last_seen_at:'2026-11-04T19:51:00Z',root_status:'ok',product:null as string|null,attention,
+    version:'1.2.3' as string|null,publisher:'Publisher' as string|null,scope:'User',last_seen_at:'2026-11-04T19:51:00Z',root_status:'ok',product:null as string|null,attention,
     approval_status:attention ? 'unapproved' : 'approved',assessment_status:'complete',findings:attention ? [{title:'Review changed configuration',detail:'The installed configuration differs from the previously reviewed version.'}] : [],findings_truncated:false,metadata:{} as Record<string,unknown>});
   const apps = [item('cursor','Cursor','AI editor',true),item('codex','Codex','Coding agent'),item('claude','Claude Code','Coding agent'),item('hermes','Hermes','AI agent')];
   apps.forEach((asset,i) => { asset.product = ['cursor','codex','claude-code','hermes'][i]; asset.findings = []; asset.assessment_status = 'unsupported'; });
@@ -7758,8 +7781,23 @@ test('Posture navigates real app pages, searches loaded assets, and preserves fi
   await page.getByRole('tab',{name:'Usage',exact:true}).focus(); await page.keyboard.press('End');
   await expect(page.getByRole('tab',{name:'Posture',exact:true})).toBeFocused();
   await expect(page.locator('.posture-stat strong')).toHaveText(['4','8','8']);
+  await expect(page.locator('#posture-attention .posture-row-copy small')).toHaveText(['Awaiting review','Dependency advisory reported','Changed instructions']);
+  await expect(page.locator('#posture-configure')).toBeHidden();
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(page.locator('.posture-stat strong')).toHaveText(['4','8','8']);
+  for (const tab of ['apps','components','skills','overview']) {
+    await page.locator(`#posture-${tab}-tab`).click();
+    await expect(page.locator(`#posture-${tab}-tab`)).toHaveAttribute('aria-selected','true');
+  }
   await page.getByRole('button',{name:'View AI Apps',exact:true}).click();
   await expect(page.locator('#posture-rows .posture-row')).toHaveCount(4);
+  await expect(page.getByRole('searchbox')).toHaveAttribute('placeholder','Search apps');
+  await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('1.2.3 · Publisher');
+  await page.locator('#posture-rows .posture-row').first().click();
+  await expect(page.locator('.posture-facts')).toContainText('KindAI editor');
+  await expect(page.locator('.posture-facts')).toContainText('SourceOrganization inventory');
+  await expect(page.locator('.posture-facts')).toContainText('Version1.2.3');
+  await page.getByRole('button',{name:'Close asset details'}).click();
   await page.getByRole('checkbox',{name:'Needs attention',exact:true}).check();
   await expect(page.locator('#posture-rows .posture-row')).toHaveCount(1);
   await page.getByRole('checkbox',{name:'Needs attention',exact:true}).uncheck();
@@ -7768,20 +7806,27 @@ test('Posture navigates real app pages, searches loaded assets, and preserves fi
   await page.getByRole('searchbox',{name:'Search loaded assets'}).fill('no-match');
   await expect(page.locator('#posture-rows')).toContainText('No matching assets');
   await page.getByRole('tab',{name:'Supply Chain',exact:true}).click();
+  await expect(page.getByRole('searchbox')).toHaveAttribute('placeholder','Search components');
+  await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('MCP server · 1.2.3 · Publisher');
   await expect(page.locator('#posture-rows .posture-badge')).toHaveText(Array(6).fill('Not assessed'));
   await page.getByRole('button',{name:'Next asset page'}).click();
-  await expect(page.locator('#posture-result')).toHaveText('7–8 of 8 loaded components');
+  await expect(page.locator('#posture-result')).toHaveText('7–8 of 8 components');
+  await page.getByRole('button',{name:'Previous asset page'}).click();
+  await expect(page.locator('#posture-result')).toHaveText('1–6 of 8 components');
+  await page.getByRole('button',{name:'Next asset page'}).click();
   await page.getByRole('button',{name:/Example parser/}).click();
   await expect(page.getByRole('dialog')).toContainText('1 finding');
   await expect(page.getByRole('dialog')).toContainText('Assessment: Complete');
-  await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Close asset details'}).click();
   await page.getByRole('tab',{name:'AI Skills',exact:true}).click();
+  await expect(page.getByRole('searchbox')).toHaveAttribute('placeholder','Search skills');
+  await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('1.2.3 · Publisher');
   await page.locator('#posture-rows .posture-row').first().click();
   await expect(page.getByRole('dialog',{name:'deploy-preview'})).toContainText(evidence);
   await expect(page.getByRole('dialog')).toContainText('Additional findings are available in the dashboard.');
   await expect(page.getByRole('dialog').locator('a, img')).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as {postureInjected?:boolean}).postureInjected)).toBeUndefined();
-  await page.keyboard.press('Escape');
+  await page.locator('#posture-done').click();
   await expect(page.locator('#posture-rows .posture-row').first()).toBeFocused();
   await page.locator('#posture-rows .posture-row').first().click();
   await page.evaluate(async () => {
@@ -7802,6 +7847,16 @@ for (const local of [false,true]) for (const colorScheme of ['light','dark'] as 
   test(`Posture layout fits ${colorScheme} at ${maxWindowHeight}px with populated ${local ? 'local' : 'organization'} inventory`, async ({page},testInfo) => {
     await page.emulateMedia({colorScheme});
     const posture = postureFixture(local);
+    if (!local) {
+      const apps = posture.groups.apps.items;
+      posture.groups.apps = {items:Array.from({length:7},(_,i) => ({...apps[i%apps.length],id:`app-${i}`,attention:true,approval_status:'approved'})),total:7,truncated:false};
+      const component = posture.groups.components.items[0];
+      posture.groups.components = {items:Array.from({length:200},(_,i) => ({...component,id:`component-${i}`,name:`${component.name} ${i+1}`,attention:true})),total:474,truncated:true};
+      const skill = {...posture.groups.skills.items[0],version:null,publisher:null,source:'openaidr-skills'};
+      posture.groups.skills = {items:Array.from({length:159},(_,i) => ({...skill,id:`skill-${i}`,name:i ? `code-review-${i}` : skill.name})),total:159,truncated:false};
+      posture.coverage.status = 'partial'; posture.coverage.sources[0].status = 'partial';
+      posture.coverage.sources[0].message = 'Some inventory sources could not be read.';
+    }
     posture.groups.skills.items[0].path = '/Users/example/Projects/customer-website/.claude/skills/deploy-preview/SKILL.md';
     await boot(page,{status:local ? freeStatus() : guardrailStatus(),posture,maxWindowHeight});
     await page.getByRole('tab',{name:'Posture',exact:true}).click();
@@ -7809,6 +7864,12 @@ for (const local of [false,true]) for (const colorScheme of ['light','dark'] as 
     const app = page.locator('#app');
     for (const name of ['Overview','AI Apps','Supply Chain','AI Skills']) {
       await page.getByRole('tab',{name,exact:true}).click();
+      await expect(page.locator('.posture-heading p')).toHaveCount(0);
+      if (name === 'Overview' && !local) {
+        await expect(page.locator('.posture-stat strong')).toHaveText(['7','474','159']);
+        await expect(page.locator('#posture-attention-count')).toHaveText('366 loaded');
+        await expect(page.locator('#posture-attention .posture-row-copy small')).toHaveCount(0);
+      }
       if (local && name === 'Overview') {
         await page.getByRole('button',{name:'Enable automatic checks'}).scrollIntoViewIfNeeded();
         await expect(page.getByRole('button',{name:'Enable automatic checks'})).toBeInViewport({ratio:1});
@@ -7821,11 +7882,48 @@ for (const local of [false,true]) for (const colorScheme of ['light','dark'] as 
       if (maxWindowHeight === 720) {
         await expect(page.locator('#status-footer')).toBeInViewport({ratio:1});
         expect(await app.evaluate(node => node.scrollHeight <= node.clientHeight+1)).toBe(true);
+        if (!local) expect(await page.locator('main').evaluate(node => node.getBoundingClientRect().height)).toBeLessThanOrEqual(name === 'Overview' ? 580 : 640);
         await page.screenshot({path:testInfo.outputPath(`posture-${name.replaceAll(' ','-')}-${colorScheme}.png`),animations:'disabled'});
       } else {
+        if (name !== 'Overview') {
+          const next = page.getByRole('button',{name:'Next asset page'});
+          await next.scrollIntoViewIfNeeded();
+          await expect(next).toBeInViewport({ratio:1});
+          if (name === 'AI Apps' && local) await expect(next).toBeDisabled();
+          else {
+            await next.click();
+            await expect(page.locator('#posture-page-number')).toContainText('2 /');
+            await page.getByRole('button',{name:'Previous asset page'}).click();
+          }
+        }
         await page.locator('#show-about').scrollIntoViewIfNeeded();
         await expect(page.locator('#show-about')).toBeInViewport({ratio:1});
         expect(await app.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+      }
+      if (name === 'Overview') {
+        const summary = page.locator('#posture-coverage-details summary');
+        await summary.scrollIntoViewIfNeeded();
+        await expect(summary).toBeInViewport({ratio:1});
+        if (!local) {
+          await expect(summary).toContainText('Supply Chain: 200 of 474 loaded');
+          await expect(summary).toHaveAccessibleDescription('Collection incomplete Supply Chain: 200 of 474 loaded');
+        }
+        await expect(page.locator('#posture-collected')).toBeHidden();
+        await summary.focus(); await page.keyboard.press('Enter');
+        await expect(page.locator('#posture-collected')).toBeVisible();
+        await expect(page.locator('#posture-sources')).toContainText(local ? 'Some skill files could not be read.' : 'Some inventory sources could not be read.');
+        await page.locator('#posture-sources').scrollIntoViewIfNeeded();
+        await expect(page.locator('#posture-sources')).toBeInViewport({ratio:1});
+        expect(await app.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+        await summary.focus(); await page.keyboard.press('Enter');
+        await expect(page.locator('#posture-sources')).toBeHidden();
+      } else if (!local) {
+        await expect(page.locator('#posture-loaded')).toHaveText('Supply Chain: 200 of 474 loaded');
+        if (name === 'Supply Chain') await expect(page.locator('#posture-result')).toHaveText('1–6 of 200 loaded components');
+        if (name === 'AI Skills') {
+          await expect(page.locator('#posture-result')).toHaveText('1–6 of 159 skills');
+          await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('openaidr-skills');
+        }
       }
     }
     await page.locator('#posture-rows .posture-row').first().click();
@@ -7850,7 +7948,6 @@ for (const connection_mode of ['free','api_key']) {
       await page.getByRole('tab',{name,exact:true}).click();
       await expect(page.locator('#posture-review-column')).toHaveText('Assessment');
       await expect(page.locator('#posture-rows .posture-badge').first()).toHaveText(label);
-      if (name === 'AI Apps') await expect(page.locator('#posture-description')).toHaveText('Known AI apps found on this device');
       await page.locator('#posture-rows .posture-row').first().click();
       await expect(page.getByRole('dialog')).toContainText(`Assessment: ${label}`);
       await expect(page.getByRole('dialog')).not.toContainText(/organization|administrator|dashboard/i);
@@ -7869,9 +7966,14 @@ test('Posture distinguishes truncated, partial, empty, unavailable, and failed d
   await page.getByRole('tab',{name:'Posture',exact:true}).click();
   await expect(page.locator('#posture-note')).toContainText('AI Apps: 4 of 250 loaded');
   await expect(page.locator('#posture-attention-count')).toHaveText('3 loaded');
-  await expect(page.locator('#posture-coverage-title')).toHaveText('Collection is incomplete');
-  await page.getByText('Collection details',{exact:true}).click();
+  await expect(page.locator('#posture-coverage-title')).toHaveText('Collection incomplete');
+  await expect(page.locator('#posture-loaded')).toBeVisible();
+  await expect(page.locator('#posture-loaded')).toHaveText('AI Apps: 4 of 250 loaded');
+  await page.locator('#posture-coverage-details summary').click();
   await expect(page.locator('#posture-sources')).toContainText('A source could not be read.');
+  await expect(page.locator('#posture-note')).toBeVisible();
+  await expect(page.locator('#posture-note')).toContainText('Search and attention counts cover loaded records only.');
+  await expect(page.locator('#posture-note')).toContainText('Organization approval is separate from security assessment.');
   await page.evaluate(() => { (window as unknown as {mock:Mock}).mock.postureError = 'Server could not be reached.'; });
   await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(page.locator('#posture-message')).toContainText('Showing previously loaded posture. Server could not be reached.');
@@ -7886,6 +7988,7 @@ test('Posture distinguishes truncated, partial, empty, unavailable, and failed d
   await page.evaluate(value => { (window as unknown as {mock:Mock}).mock.posture = value; },empty);
   await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(page.locator('#posture-coverage-title')).toHaveText('Collection unavailable');
+  await expect(page.locator('#posture-loaded')).toBeHidden();
   await page.getByRole('tab',{name:'AI Apps',exact:true}).click();
   await expect(page.locator('#posture-rows')).toContainText('No assets have been reported');
 });
@@ -7973,4 +8076,176 @@ test('Posture discards a late consent response and old billing when the connecti
   await expect(page.locator('#posture-credit-available')).toHaveText('Unavailable');
   await expect(page.locator('#posture-credit-charged')).toHaveText('Unavailable');
   expect((await requests(page)).filter(row => row.action === 'posture.configure')).toEqual([{action:'posture.configure',automatic:true,scope:'a'.repeat(64)}]);
+});
+
+const proxyStatus = {mode:'manual', url:'http://proxy.corp.example:3128', bypass:['*.corp.example','10.0.0.1'], username:'svc-openaidr'};
+const proxyConnected = {...converged, tenant_name:'Example organization', heartbeat:{last_success_at:'2026-10-08T02:50:00Z',error:''}, activity:{queue_depth:0}};
+const proxyRequests = (page:Page) => requests(page).then(rows => rows.filter(row => String(row.action).startsWith('proxy.')));
+
+for (const maxWindowHeight of [720, 320]) {
+  test(`network proxy opens from the connected status within a ${maxWindowHeight}px work area`, async ({page}, testInfo) => {
+    await page.clock.install({time:new Date('2026-10-08T02:50:00Z')});
+    await boot(page, {status:{...proxyConnected, network_proxy:proxyStatus}, maxWindowHeight, proxy:{status:{...proxyStatus, password_saved:true}}});
+    await expect(page.locator('#sensor-status')).toHaveAccessibleName('Sensor status: Connected');
+    await openSensorStatus(page, false);
+    const panel = page.locator('#health-card');
+    await expect(panel).toHaveClass(/compact-status/);
+    await expect(page.locator('#proxy-summary')).toHaveText('Through proxy proxy.corp.example:3128');
+    expect(await panel.evaluate(node => node.scrollWidth === node.clientWidth)).toBe(true);
+    if (maxWindowHeight === 720) await expectFitsWindow(page);
+    const open = page.getByRole('button', {name:'Network proxy', exact:true});
+    await open.focus();
+    await expect(open).toBeInViewport({ratio:1});
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', {name:'Network proxy'});
+    await expect(dialog).toBeVisible();
+    await expect(page.locator('#proxy-url')).toBeFocused();
+    await expect(page.locator('#proxy-manual')).toBeChecked();
+    await expect(page.locator('#proxy-url')).toHaveValue('http://proxy.corp.example:3128');
+    await expect(page.locator('#proxy-bypass')).toHaveValue('*.corp.example, 10.0.0.1');
+    await expect(page.locator('#proxy-username')).toHaveValue('svc-openaidr');
+    await expect(page.locator('#proxy-password')).toHaveValue('');
+    await expect(page.locator('#proxy-password')).toHaveAttribute('placeholder', 'Saved password');
+    expect(await page.locator('#proxy-dialog').evaluate(node => node.scrollWidth === node.clientWidth)).toBe(true);
+    if (maxWindowHeight === 720) await expectFitsWindow(page);
+    else {
+      // A short work area scrolls inside the dialog; every control stays reachable.
+      for (const id of ['proxy-direct', 'proxy-url', 'proxy-password', 'test-proxy', 'cancel-proxy', 'save-proxy']) {
+        await page.locator('#' + id).focus();
+        await expect(page.locator('#' + id)).toBeInViewport({ratio:1});
+      }
+    }
+    await page.screenshot({path:testInfo.outputPath(`network-proxy-${maxWindowHeight}.png`)});
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(open).toBeFocused();
+    expect((await proxyRequests(page)).map(row => row.action)).toEqual(['proxy.status']);
+  });
+}
+
+test('network proxy validates, tests, and saves without displaying the password', async ({page}) => {
+  await page.clock.install({time:new Date('2026-10-08T02:50:00Z')});
+  await boot(page, {status:proxyConnected, maxWindowHeight:720, proxy:{status:{mode:'default'}}});
+  await openSensorStatus(page, false);
+  await expect(page.locator('#proxy-summary')).toHaveText('Direct connection');
+  await page.getByRole('button', {name:'Network proxy', exact:true}).click();
+  const dialog = page.getByRole('dialog', {name:'Network proxy'});
+  const url = page.locator('#proxy-url'), alert = page.locator('#proxy-error'), save = dialog.getByRole('button', {name:'Save'});
+  await expect(page.locator('#proxy-direct')).toBeChecked();
+  await expect(page.locator('#proxy-fields')).toBeHidden();
+  await expect(page.locator('#test-proxy')).toBeDisabled();
+  await page.locator('#proxy-manual').check();
+  await expect(url).toBeEnabled();
+  for (const [value, message] of [
+    ['', 'Enter a proxy URL.'],
+    ['socks5://proxy.corp.example:1080', 'Use an http:// or https:// proxy URL.'],
+    ['http://alice:pw@proxy.corp.example:8080', 'Enter the user name and password separately, not in the URL.'],
+    ['http://proxy.corp.example:8080/path', 'Remove the path from the proxy URL.'],
+  ]) {
+    await url.fill(value);
+    await save.click();
+    await expect(alert).toHaveText(message);
+    await expect(url).toBeFocused();
+  }
+  await url.fill('https://proxy.corp.example:8443');
+  await page.locator('#proxy-bypass').fill('*.corp.example, bad host!');
+  await save.click();
+  await expect(alert).toHaveText('“host!” is not a host name, domain, or IP address.');
+  await page.locator('#proxy-bypass').fill('*.corp.example, 10.0.0.1');
+  await page.locator('#proxy-auth').check();
+  await save.click();
+  await expect(alert).toHaveText('Enter the proxy user name.');
+  await page.locator('#proxy-username').fill('svc-openaidr');
+  await save.click();
+  await expect(alert).toHaveText('Enter the proxy password.');
+  await expect(page.locator('#proxy-password')).toBeFocused();
+  expect(await proxyRequests(page)).toEqual([{action:'proxy.status'}]);
+  await page.locator('#proxy-password').fill('pw-secret-value');
+  await page.getByRole('button', {name:'Test connection'}).click();
+  await expect(page.locator('#proxy-test-result')).toHaveText('Reached the OpenAIDR server through the proxy in 84 ms.');
+  await expect(alert).toBeHidden();
+  const expected = {mode:'manual', url:'https://proxy.corp.example:8443', bypass:['*.corp.example','10.0.0.1'], username:'svc-openaidr', password:'pw-secret-value'};
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.test', ...expected});
+  expect(await page.locator('body').innerText()).not.toContain('pw-secret-value');
+  await page.evaluate(() => { (window as unknown as {mock:Mock}).mock.proxy!.saveError = 'No secure credential store is available.'; });
+  await save.click();
+  await expect(alert).toHaveText('No secure credential store is available.');
+  await expect(dialog).toBeVisible();
+  await page.evaluate(() => { delete (window as unknown as {mock:Mock}).mock.proxy!.saveError; });
+  await save.click();
+  await expect(dialog).toBeHidden();
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.save', ...expected});
+  await expect(page.getByRole('button', {name:'Network proxy', exact:true})).toBeFocused();
+  await expect(page.locator('#proxy-summary')).toHaveText('Through proxy proxy.corp.example:8443');
+  await page.getByRole('button', {name:'Network proxy', exact:true}).click();
+  await expect(page.locator('#proxy-password')).toHaveValue('');
+  await expect(page.locator('#proxy-password')).toHaveAttribute('placeholder', 'Saved password');
+  await page.locator('#proxy-direct').check();
+  await save.click();
+  await expect(dialog).toBeHidden();
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.save', mode:'direct'});
+  await expect(page.locator('#proxy-summary')).toHaveText('Direct connection');
+});
+
+test('network proxy is in Settings before enrollment and absent from error status', async ({page}) => {
+  await boot(page, {status:unenrolled, maxWindowHeight:720, proxy:{status:{mode:'default'}}});
+  await page.locator('#change-connection').click();
+  const open = page.locator('#settings-proxy');
+  await expect(open).toHaveAccessibleName('Network proxy');
+  await open.click();
+  const dialog = page.getByRole('dialog', {name:'Network proxy'});
+  await expect(dialog).toBeVisible();
+  await expectFitsWindow(page);
+  await page.locator('#proxy-manual').check();
+  await page.locator('#proxy-url').fill('http://proxy.corp.example:3128');
+  await dialog.getByRole('button', {name:'Save'}).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('#connection-dialog')).toBeVisible();
+  await expect(open).toBeFocused();
+  expect((await proxyRequests(page)).at(-1)).toEqual({action:'proxy.save', mode:'manual', url:'http://proxy.corp.example:3128', bypass:[], username:''});
+  await expect(page.locator('#proxy-row')).toBeHidden();
+});
+
+for (const maxWindowHeight of [720, 420]) test(`enterprise enrollment and Settings fit a ${maxWindowHeight}px work area`, async ({page}, testInfo) => {
+  test.skip(process.env.OPENAIDR_DESKTOP_EDITION !== 'enterprise', 'Enterprise build only');
+  await boot(page, {status:unenrolled, preview, afterEnroll:converged, maxWindowHeight});
+  await expect(page.locator('#resume-app')).toBeHidden();
+  for (const selector of ['#continue-free', '#use-api-key', '#api-key-dialog', '#choose-local-runtime', '#local-runtime-view', '#back-to-choices']) {
+    await expect(page.locator(selector)).toHaveCount(0);
+  }
+  await expect(page.locator('#enrollment-link')).toBeVisible();
+  const layout = await page.evaluate(readFileSync(new URL('../e2e/startup-layout.js', import.meta.url), 'utf8')) as {edition:string;controls:{selector:string}[]};
+  expect(layout.edition).toBe('enterprise');
+  expect(layout.controls.map(control => control.selector)).toEqual(['#enrollment-link', '#connect-link']);
+  await page.locator('#enrollment-link').fill(link);
+  await expect(page.locator('#link-organization')).toHaveText('Example organization');
+  await expect(page.locator('#connect-link')).toBeEnabled();
+  const app = page.locator('#app');
+  expect(await app.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  if (maxWindowHeight === 720) expect(await app.evaluate(node => node.scrollHeight <= node.clientHeight + 1)).toBe(true);
+  else {
+    expect(await app.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+    await page.locator('#connect-link').scrollIntoViewIfNeeded();
+    await expect(page.locator('#connect-link')).toBeInViewport();
+  }
+  await page.screenshot({path:testInfo.outputPath('enterprise-enrollment.png')});
+  await page.locator('#connect-link').click();
+  await expect(page.locator('#connect-card')).toBeHidden();
+  await page.locator('#change-connection').click();
+  await expect(page.locator('#connection-dialog')).toBeVisible();
+  await expect(page.locator('#enrollment-link')).toBeVisible();
+  await expect(page.locator('#choose-local-runtime')).toHaveCount(0);
+  await page.getByRole('button', {name:'Done',exact:true}).click();
+  const requests = await page.evaluate(() => (window as unknown as {requests:Requests}).requests);
+  expect(requests.some(request => request.action === 'enrollment.connect')).toBe(true);
+  expect(requests.some(request => request.action === 'desktop.resume')).toBe(false);
+  expect(requests.some(request => request.action.startsWith('local-runtime.') || request.action === 'free.connect' || request.action === 'api-key.connect')).toBe(false);
+});
+
+for (const connection_mode of ['free','api_key','organization']) test(`enterprise requires enrollment over an existing ${connection_mode} personal installation`, async ({page}) => {
+  test.skip(process.env.OPENAIDR_DESKTOP_EDITION !== 'enterprise', 'Enterprise build only');
+  await boot(page, {status:{...enrolled,connection_mode,enterprise_enrollment_required:true}});
+  await expect(page.locator('#enrollment-link')).toBeVisible();
+  const requests = await page.evaluate(() => (window as unknown as {requests:Requests}).requests);
+  expect(requests.some(request => request.action === 'setup')).toBe(false);
 });

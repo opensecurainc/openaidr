@@ -1,7 +1,7 @@
 {
   "source_repository": "opensecurainc/openaidr-internal",
-  "source_commit": "8d1eea79a04ba68bc8be171c3f8b6e5677bc3272",
-  "published_files": 1157,
+  "source_commit": "d3900b448ce739ebadc6f33557672dbbf0e88d67",
+  "published_files": 1165,
   "removed_files": 0,
   "exclude": [
     ".github/",
@@ -98,6 +98,7 @@
     "tests/test_customer_free_config.py",
     "tests/test_free_tier.py",
     "tests/test_retained_model_costs.py",
+    "tests/test_provider_settings.py",
     "tests/test_service_adapter_imports.py",
     "tests/test_service_enrollment_imports.py",
     "tests/test_service_skill_worker_imports.py",
@@ -142,6 +143,7 @@
     "tests/test_official_release_selection.py",
     "tests/test_offline_packages.py",
     "tests/test_platform_costs.py",
+    "tests/test_platform_admin.py",
     "tests/test_production_releases.py",
     "tests/test_provisioning.py",
     "tests/test_qualification_catalog.py",
@@ -177,7 +179,14 @@
     "src/openaidr/server/staff_invitations.py",
     "src/openaidr/server/summary_report_storage.py",
     "src/openaidr/server/summary_reports.py",
-    "src/openaidr/server/vm_lifecycle.py"
+    "src/openaidr/server/vm_lifecycle.py",
+    "dependencies/intelligence-api.json",
+    "dependencies/api-runtime/promotion-provenance.json",
+    "scripts/api_dependencies.py",
+    "scripts/check_publication.py",
+    "scripts/bundle_local_runtime.py",
+    "scripts/client_dependencies.py",
+    "tests/test_client_dependencies.py"
   ],
   "public_owned": [
     ".dockerignore",
@@ -218,6 +227,13 @@
     "tests/test_claude_review_workflow.py",
     "tests/test_publish_app_assets.py",
     "packages/ui/opensecura-mark.svg",
-    "packages/ui/opensecura-mark-dark.svg"
+    "packages/ui/opensecura-mark-dark.svg",
+    "scripts/check_publication.py",
+    "scripts/verify_public_dependencies.py",
+    "scripts/bundle_local_runtime.py",
+    "src/openaidr/sensor/local_runtime.py",
+    "src/openaidr/sensor/local_runtime_source.tar.gz",
+    "tests/test_local_runtime.py",
+    "tests/test_publication_contents.py"
   ]
 }

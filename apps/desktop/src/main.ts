@@ -11,13 +11,17 @@ import { initAlerts } from './alerts';
 import { initCloudCredit, type CloudProtection } from './cloud-credit';
 import { initMenuBar } from './menu-bar';
 import { initLocalRuntime } from './local-runtime';
+import { initProxy, type ProxyStatus } from './proxy';
+
+const enterpriseOnly = import.meta.env.VITE_ENTERPRISE_ONLY === true;
 
 type TelemetryAgent = 'codex' | 'claude';
 type TelemetryClient = {pid:number; process_name:string; started_at:string; last_failed_at:string; signals:string[]};
 type SensorStatus = {
+  enterprise_enrollment_required?: boolean;
   connection_mode?: 'free' | 'api_key' | 'organization';
   cloud_protection?: CloudProtection | null;
-  sensor_id?: string; server_url?: string; tenant_name?: string;
+  sensor_id?: string; server_url?: string; tenant_name?: string; network_proxy?: ProxyStatus | null;
   desktop_removal?: {state: 'pending' | 'complete'; errors?: string[]; retained_data?: string; data_deletion_started?: boolean; data_deleted?: boolean};
   enrolled?: boolean; running?: boolean; disabled?: boolean; foreground?: boolean; service_downgrade?: boolean; recorded_service_version?: string; version?: string; service_version?: string; service_outdated?: boolean; service_newer?: boolean; settings_stale?: boolean;
   service?: string | { status?: string; installed?: boolean; running?: boolean };
@@ -94,7 +98,7 @@ type HealthTone = 'idle' | 'online' | 'loading' | 'busy' | 'warning' | 'error';
 const healthIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="status-check" d="m6 12 4 4 8-9"/><path class="status-idle" d="M12 6v6l4 2"/><path class="status-alert" d="M12 5v8m0 5v.1"/><path class="status-error" d="m6 6 12 12m0-12L6 18"/></svg>`;
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <main>
+  <main data-desktop-edition="${enterpriseOnly ? 'enterprise' : 'standard'}">
   <header>
     <div class="brand"><img src="/icon.svg" alt=""><div>OpenAIDR</div></div>
     <nav id="page-navigation" class="app-pages" role="tablist" aria-label="App pages" hidden>
@@ -136,7 +140,7 @@ app.innerHTML = `
     <div id="removal-actions" class="buttons" hidden><button id="resume-app" class="button button-secondary" hidden>Reinstall</button><button id="trash-app" class="button button-danger" hidden>Move app to Trash</button></div>
   </section>
   <section id="setup-choices" aria-label="Choose how to get started" hidden>
-    <div class="setup-options">
+    ${enterpriseOnly ? '' : `<div class="setup-options">
       <section class="card setup-choice" aria-labelledby="free-title">
         <div class="setup-choice-heading"><span class="setup-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="13" rx="2"/><path d="m9 16-1 5m7-5 1 5M2 21h20"/></svg></span><h2 id="free-title">Use OpenAIDR<br>for free</h2></div>
         <p>Cloud guardrails with a free usage allowance.<br>No account required.</p>
@@ -148,12 +152,12 @@ app.innerHTML = `
         <div class="setup-choice-actions"><button id="choose-organization" class="button button-secondary" type="button">Connect organization</button></div>
       </section>
     </div>
-    <p class="setup-later">You can connect to an organization later in Settings.</p>
+    <p class="setup-later">You can connect to an organization later in Settings.</p>`}
   </section>
   <section id="connect-card" class="card" aria-labelledby="connection-title" hidden>
-    <div id="connection-heading" class="section-heading"><h2 id="connection-title">Connect your organization</h2><button id="back-to-choices" class="button button-secondary" type="button" hidden>Back</button></div>
-    <p class="connection-intro">Use an enrollment link, or get started on this computer.</p>
-    <div id="connection-options">
+    <div id="connection-heading" class="section-heading"><h2 id="connection-title">Connect your organization</h2>${enterpriseOnly ? '' : '<button id="back-to-choices" class="button button-secondary" type="button" hidden>Back</button>'}</div>
+    <p class="connection-intro">${enterpriseOnly ? 'Use the enrollment link from your organization administrator.' : 'Use an enrollment link, or get started on this computer.'}</p>
+    <div id="connection-options" class="${enterpriseOnly ? 'enterprise-connection' : ''}">
     <section class="card connection-option"><h3>I have an enrollment link</h3><p>Join an existing organization.</p>
     <form id="link-enrollment">
       <label for="enrollment-link">Enrollment link</label>
@@ -172,12 +176,12 @@ app.innerHTML = `
       </div>
     </form>
     </section>
-    <section class="card connection-option"><h3>Set up on this computer</h3><p>Your own local runtime and dashboard.</p><p class="local-option-copy">OpenAIDR creates the runtime and connects this device automatically. No enrollment link needed.</p><div class="connection-option-actions"><button id="choose-local-runtime" class="button button-secondary" type="button">Set up local runtime →</button><p class="form-hint">Requires Docker with Compose.<br>AI checks use the cloud.</p></div></section>
+    ${enterpriseOnly ? '' : `<section class="card connection-option"><h3>Set up on this computer</h3><p>Your own local runtime and dashboard.</p><p class="local-option-copy">OpenAIDR creates the runtime and connects this device automatically. No enrollment link needed.</p><div class="connection-option-actions"><button id="choose-local-runtime" class="button button-secondary" type="button">Set up local runtime →</button><p class="form-hint">Requires Docker with Compose.<br>AI checks use the cloud.</p></div></section>`}
     </div>
   </section>
   <footer id="status-footer"><button tabindex="0" id="change-connection" class="button button-secondary" aria-haspopup="dialog" aria-controls="connection-dialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h3m4 0h9M4 17h9m4 0h3"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>Settings</button><button id="check-update" class="button button-secondary" type="button">Check updates</button><button id="show-about" tabindex="0" class="button button-secondary" type="button" aria-haspopup="dialog" aria-controls="about-dialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.01"/></svg>About</button><span id="build-info"></span></footer>
   </main>
-  <dialog id="api-key-dialog" class="simulation-dialog" aria-labelledby="api-key-title">
+  ${enterpriseOnly ? '' : `<dialog id="api-key-dialog" class="simulation-dialog" aria-labelledby="api-key-title">
     <form id="api-key-form">
       <h2 id="api-key-title">Connect with an API key</h2>
       <p>Enter an OpenSecura API key to use cloud guardrails. Usage stays on this device, and checks run in Shadow mode.</p>
@@ -194,6 +198,7 @@ app.innerHTML = `
     <p>Free guardrails start in Shadow mode. Checks are recorded and actions continue. If the service is unavailable or the allowance is exhausted, actions still continue and the app shows that protection is inactive.</p>
     <div class="simulation-actions"><button id="close-data-use" class="button" type="button">Done</button></div>
   </dialog>
+  `}
   <dialog id="connection-dialog" class="simulation-dialog connection-dialog" aria-labelledby="settings-title">
     <div class="section-heading"><h2 id="settings-title">Settings</h2><button id="close-connection" tabindex="0" class="button icon-button close-button" type="button" aria-label="Close Settings">×</button></div>
     <div id="settings-actions" class="settings-actions"><button id="cancel-change" class="button button-secondary" type="button">Done</button></div>
@@ -236,6 +241,7 @@ initAbout(request);
 const menuBar = initMenuBar(() => { void refresh(false); if (!menuBar.hidden()) void refreshUpdate(); }, fitWindow);
 const healthCard = el('health-card');
 const credits = initCredits(healthCard, request, () => !document.hidden && !menuBar.hidden());
+const proxy = initProxy(healthCard, request, () => { void refresh(false); }, () => setStatusOpen(true, false));
 const dashboardLink = document.createElement('a');
 dashboardLink.id = 'dashboard-link';
 dashboardLink.tabIndex = 0;
@@ -283,6 +289,7 @@ function presentHealth(tone: HealthTone, label: string, popover: boolean) {
   healthCard.dataset.tone = tone;
   const compact = popover && tone === 'online' && label === 'Connected' && !TELEMETRY_AGENTS.some(agent => current?.telemetry?.[`${agent}_opted_out`]);
   healthCard.classList.toggle('compact-status', compact);
+  proxy.update(compact && !!current?.sensor_id, current?.network_proxy);
   healthCard.setAttribute('aria-labelledby', compact ? 'credit-title' : 'health-title');
   healthCard.classList.toggle('status-popover', popover);
   if (popover) el('health-description').removeAttribute('title');
@@ -369,7 +376,7 @@ function startFitting() {
 function showConnectionView(open: boolean) {
   const card = el('connect-card');
   card.hidden = !open;
-  el('back-to-choices').hidden = !open || editingConnection || !!current?.enrolled;
+  if (!enterpriseOnly) el('back-to-choices').hidden = !open || editingConnection || !!current?.enrolled;
   el('change-connection').setAttribute('aria-expanded', String(editingConnection));
   text('connection-title', editingConnection ? 'Connection' : 'Connect your organization');
   if (editingConnection) {
@@ -415,7 +422,7 @@ const updates = initUpdates(request, BUILD_VERSION, update => {
   clearTimeout(updateTimer);
   updateTimer = setTimeout(() => void refreshUpdate(), 1000);
 });
-const localRuntime = initLocalRuntime(request, async operation => {
+const localRuntime = enterpriseOnly ? null : initLocalRuntime(request, async operation => {
   if (busy) throw new Error(OPERATION_BUSY);
   busy = true; availability();
   try { await operation(); }
@@ -428,7 +435,7 @@ const localRuntime = initLocalRuntime(request, async operation => {
 function availability() {
   const tauri = isTauri();
   (el('enrollment-link') as HTMLInputElement).disabled = busy;
-  (el('api-key') as HTMLInputElement).disabled = busy;
+  if (!enterpriseOnly) (el('api-key') as HTMLInputElement).disabled = busy;
   (el('enrollment-ca') as HTMLInputElement).disabled = busy || !tauri;
   document.querySelectorAll<HTMLButtonElement>('main button, #connection-dialog button, #api-key-dialog button').forEach(button => { button.disabled = busy || !tauri; });
   usage.setAvailability(!tauri || (busy && !settingUp) ? 'disabled'
@@ -439,14 +446,14 @@ function availability() {
   for (const id of ['sensor-status', 'close-status', 'show-about']) (el(id) as HTMLButtonElement).disabled = false;
   updates.availability(tauri);
   (el('connect-link') as HTMLButtonElement).disabled ||= !enrollmentPreview || previewPending;
-  (el('connect-api-key') as HTMLButtonElement).disabled ||= !(el('api-key') as HTMLInputElement).value.trim();
-  (el('change-connection') as HTMLButtonElement).disabled = busy || !tauri || localRuntime.isOpen();
+  if (!enterpriseOnly) (el('connect-api-key') as HTMLButtonElement).disabled ||= !(el('api-key') as HTMLInputElement).value.trim();
+  (el('change-connection') as HTMLButtonElement).disabled = busy || !tauri || !!localRuntime?.isOpen();
   (el('retry') as HTMLButtonElement).disabled ||= fetching;
   el('retry').setAttribute('aria-busy', String(fetching));
   for (const id of ['cancel-remove', 'confirm-remove']) (el(id) as HTMLButtonElement).disabled = busy;
   (el('delete-data') as HTMLInputElement).disabled = busy || !tauri;
   if (current?.desktop_removal?.data_deletion_started && !current.desktop_removal.data_deleted) (el('resume-app') as HTMLButtonElement).disabled = true;
-  localRuntime.availability();
+  localRuntime?.availability();
 }
 function serviceState(status: SensorStatus) {
   const service = status.service;
@@ -567,7 +574,11 @@ async function refreshUpdate() {
     if (!menuBar.hidden()) updateTimer = setTimeout(() => void refreshUpdate(), interval);
   }
 }
+function requiresOrganization(status: SensorStatus) {
+  return enterpriseOnly && (status.enterprise_enrollment_required || status.connection_mode === 'free' || status.connection_mode === 'api_key');
+}
 function render(status: SensorStatus) {
+  if (requiresOrganization(status)) status = {...status, enrolled:false};
   const standalone = status.connection_mode === 'free' || status.connection_mode === 'api_key';
   if (!!current?.desktop_removal !== !!status.desktop_removal) {
     (el('delete-data') as HTMLInputElement).checked = false;
@@ -578,8 +589,8 @@ function render(status: SensorStatus) {
   current = status;
   credits.setStatus(status);
   placeDashboard();
-  if (localRuntime.isOpen()) {
-    if (status.desktop_removal) localRuntime.dismiss();
+  if (localRuntime?.isOpen()) {
+    if (status.desktop_removal) localRuntime?.dismiss();
     else availability();
     return;
   }
@@ -794,12 +805,12 @@ function render(status: SensorStatus) {
   el('processed-label').title = standalone ? 'Records processed on this device since the sensor last started' : 'Records forwarded since the sensor last started';
   text('delivery', telemetry.received);
   renderRemovalControls();
-  el('use-api-key').hidden = !freeRateLimited;
-  const choices = !status.enrolled && !status.desktop_removal && !editingConnection && !choosingOrganization;
+  if (!enterpriseOnly) el('use-api-key').hidden = !freeRateLimited;
+  const choices = !enterpriseOnly && !status.enrolled && !status.desktop_removal && !editingConnection && !choosingOrganization;
   el('setup-choices').hidden = !choices;
   healthCard.classList.toggle('setup-welcome', choices);
-  if (!status.enrolled && choosingOrganization && !editingConnection && !status.desktop_removal) healthCard.hidden = true;
-  showConnectionView(!status.desktop_removal && ((!status.enrolled && choosingOrganization) || editingConnection));
+  if (!status.enrolled && (enterpriseOnly || choosingOrganization) && !editingConnection && !status.desktop_removal) healthCard.hidden = true;
+  showConnectionView(!status.desktop_removal && ((!status.enrolled && (enterpriseOnly || choosingOrganization)) || editingConnection));
   renderUpdate(status.desktop_update);
   availability();
 }
@@ -888,7 +899,7 @@ async function refresh(showError = true) {
 // until Retry clears it.
 async function reconcile(status: SensorStatus) {
   // Re-enrollment needs a stopped, drained sensor, so convergence pauses while the connection form is open.
-  if (!status.enrolled || busy || editingConnection || localRuntime.isOpen() || removalDialog.open || status.desktop_removal || status.desktop_update?.status_cached) return;
+  if (!status.enrolled || requiresOrganization(status) || busy || editingConnection || localRuntime?.isOpen() || removalDialog.open || status.desktop_removal || status.desktop_update?.status_cached) return;
   const gap = drift(status);
   if (!gap.any) {
     // A restart gets a new grace period, but only a receiver response clears the retry limit.
@@ -937,7 +948,7 @@ async function perform(action: string, params: Record<string, unknown>) {
     const result = await request(action, params);
     if (action === 'enrollment.connect' || action === 'free.connect' || action === 'api-key.connect') {
       freeRateLimited = false;
-      apiKeyDialog.close();
+      apiKeyDialog?.close();
       choosingOrganization = false;
       el('setup-choices').hidden = true;
       editingConnection = false; setupAttempts = 0; setupFailed = (result as {service_error?:string}).service_error || '';
@@ -961,7 +972,7 @@ async function perform(action: string, params: Record<string, unknown>) {
     connectionStartupUntil = Date.now() + 120000;
     unreachableSince = null;
     busy = false; availability(); await refresh(false);
-    if (apiKeyDialog.open) el('api-key').focus();
+    if (apiKeyDialog?.open) el('api-key').focus();
     else if (connectionView === 'status') el(current?.enrolled ? 'change-connection' : !el('setup-choices').hidden ? 'continue-free' : healthCard.classList.contains('status-popover') ? 'sensor-status' : 'retry').focus({preventScroll: true});
   }
 }
@@ -969,37 +980,39 @@ el('retry').addEventListener('click', () => {
   if (!statusFailed) { setupFailed = ''; setupAttempts = 0; }
   notice(''); void refresh();
 });
-el('continue-free').addEventListener('click', () => { void perform('free.connect', {}); });
-const apiKeyDialog = el('api-key-dialog') as HTMLDialogElement;
-const apiKeyInput = el('api-key') as HTMLInputElement;
-el('use-api-key').addEventListener('click', () => {
-  el('api-key-error').hidden = true; apiKeyInput.value = ''; availability(); apiKeyDialog.showModal(); apiKeyInput.focus();
-});
-apiKeyInput.addEventListener('input', availability);
-el('api-key-form').addEventListener('submit', event => {
-  event.preventDefault();
-  if (busy || !apiKeyInput.value.trim()) return;
-  const api_key = apiKeyInput.value.trim(); apiKeyInput.value = ''; el('api-key-error').hidden = true;
-  void perform('api-key.connect', {api_key});
-});
-el('cancel-api-key').addEventListener('click', () => { if (!busy) apiKeyDialog.close(); });
-apiKeyDialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
-apiKeyDialog.addEventListener('close', () => { apiKeyInput.value = ''; if (!el('use-api-key').hidden) el('use-api-key').focus(); });
+const apiKeyDialog = el('api-key-dialog') as HTMLDialogElement | null;
+if (!enterpriseOnly) {
+  el('continue-free').addEventListener('click', () => { void perform('free.connect', {}); });
+  const apiKeyInput = el('api-key') as HTMLInputElement;
+  el('use-api-key').addEventListener('click', () => {
+    el('api-key-error').hidden = true; apiKeyInput.value = ''; availability(); apiKeyDialog!.showModal(); apiKeyInput.focus();
+  });
+  apiKeyInput.addEventListener('input', availability);
+  el('api-key-form').addEventListener('submit', event => {
+    event.preventDefault();
+    if (busy || !apiKeyInput.value.trim()) return;
+    const api_key = apiKeyInput.value.trim(); apiKeyInput.value = ''; el('api-key-error').hidden = true;
+    void perform('api-key.connect', {api_key});
+  });
+  el('cancel-api-key').addEventListener('click', () => { if (!busy) apiKeyDialog?.close(); });
+  apiKeyDialog!.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+  apiKeyDialog!.addEventListener('close', () => { apiKeyInput.value = ''; if (!el('use-api-key').hidden) el('use-api-key').focus(); });
 
-el('choose-organization').addEventListener('click', () => {
-  choosingOrganization = true; notice('');
-  if (current) render(current);
-  el('enrollment-link').focus();
-});
-el('back-to-choices').addEventListener('click', () => {
-  choosingOrganization = false; resetLink(); notice('');
-  if (current) render(current);
-  el('choose-organization').focus();
-});
-const dataUseDialog = el('data-use-dialog') as HTMLDialogElement;
-el('data-use').addEventListener('click', () => { dataUseDialog.showModal(); });
-el('close-data-use').addEventListener('click', () => { dataUseDialog.close(); });
-dataUseDialog.addEventListener('close', () => { el('data-use').focus(); });
+  el('choose-organization').addEventListener('click', () => {
+    choosingOrganization = true; notice('');
+    if (current) render(current);
+    el('enrollment-link').focus();
+  });
+  el('back-to-choices').addEventListener('click', () => {
+    choosingOrganization = false; resetLink(); notice('');
+    if (current) render(current);
+    el('choose-organization').focus();
+  });
+  const dataUseDialog = el('data-use-dialog') as HTMLDialogElement;
+  el('data-use').addEventListener('click', () => { dataUseDialog.showModal(); });
+  el('close-data-use').addEventListener('click', () => { dataUseDialog.close(); });
+  dataUseDialog.addEventListener('close', () => { el('data-use').focus(); });
+}
 el('change-connection').addEventListener('click', () => {
   editingConnection = true; notice('');
   if (current) render(current);
@@ -1008,9 +1021,9 @@ el('change-connection').addEventListener('click', () => {
 });
 function cancelConnection() {
   if (busy) return;
-  localRuntime.dismiss();
+  localRuntime?.dismiss();
   editingConnection = false;
-  resetLink(); notice(''); showConnectionView(!!current && !current.enrolled && choosingOrganization && !current.desktop_removal);
+  resetLink(); notice(''); showConnectionView(!!current && !current.enrolled && (enterpriseOnly || choosingOrganization) && !current.desktop_removal);
   el('change-connection').focus({preventScroll: true});
   void refresh();
 }

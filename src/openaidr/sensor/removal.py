@@ -213,7 +213,10 @@ def resume(config):
         if saved.get("data_deletion_started") and not saved.get("data_deleted"):
             raise ValueError("Finish deleting local data before reinstalling.")
         config = Config.load(config.path)
-        if config.get("server_url") == local_runtime.ORIGIN and (local_runtime.directory(config) / "state.json").exists():
+        from .desktop_edition import enterprise_only
+
+        if (not enterprise_only() and config.get("server_url") == local_runtime.ORIGIN
+                and (local_runtime.directory(config) / "state.json").exists()):
             local_runtime.start(config, current_source=False)
         for section, disabled in preferences.items():
             values = dict(config.get(section) or {})

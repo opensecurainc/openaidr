@@ -1,10 +1,12 @@
 (() => {
   const app = document.querySelector('#app');
+  const edition = document.querySelector('main')?.dataset.desktopEdition ?? 'standard';
+  const selectors = edition === 'enterprise' ? ['#enrollment-link', '#connect-link'] : ['#continue-free', '#choose-organization'];
   const errors = window.__startupErrors ?? window.__e2eErrors ?? [];
-  if (!app || !document.querySelector('main') || !document.querySelector('#continue-free') || !document.querySelector('#choose-organization'))
+  if (!app || !document.querySelector('main') || !selectors.every(selector => document.querySelector(selector)))
     return {fits:false, hidden:document.hidden, viewport:{width:innerWidth,height:innerHeight}, errors, error:'Setup choices have not rendered'};
   const bounds = app.getBoundingClientRect();
-  const controls = ['#continue-free', '#choose-organization'].map(selector => {
+  const controls = selectors.map(selector => {
     const element = document.querySelector(selector);
     const rect = element.getBoundingClientRect();
     return {selector, ...rect.toJSON(), visible:!!element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden',
@@ -12,7 +14,7 @@
   });
   const scroll = {width:app.clientWidth, height:app.clientHeight, contentWidth:app.scrollWidth,
     contentHeight:app.scrollHeight, top:app.scrollTop, left:app.scrollLeft};
-  return {version:document.querySelector('#build-info')?.textContent, hidden:document.hidden,
+  return {version:document.querySelector('#build-info')?.textContent, edition, hidden:document.hidden,
     viewport:{width:innerWidth,height:innerHeight}, content:document.querySelector('main').getBoundingClientRect().toJSON(),
     scroll, controls, events:window.__startupEvents ?? [], errors,
     fits:!document.hidden && errors.length === 0 && scroll.top === 0 && scroll.left === 0

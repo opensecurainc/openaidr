@@ -134,6 +134,11 @@ def release_config(work, signing_mode="developer-id", *, bundle=True):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--edition", choices=("standard", "enterprise"),
+        default=os.environ.get("OPENAIDR_DESKTOP_EDITION", "standard"),
+        help="Enterprise requires organization enrollment and omits personal and local runtime setup",
+    )
+    parser.add_argument(
         "--sidecar-only",
         action="store_true",
         help="Stage only the sensor executable for cargo test or desktop development",
@@ -167,6 +172,9 @@ def main():
         help="Windows: package the sensor runtime and desktop executable a --no-bundle build staged",
     )
     args = parser.parse_args()
+    if args.edition not in ("standard", "enterprise"):
+        parser.error("OPENAIDR_DESKTOP_EDITION must be standard or enterprise")
+    os.environ["OPENAIDR_DESKTOP_EDITION"] = args.edition
     if args.macos_universal:
         if sys.platform != "darwin":
             parser.error("--macos-universal requires macOS")
@@ -223,7 +231,7 @@ def main():
     work = ROOT / "build" / "desktop"
     work.mkdir(parents=True, exist_ok=True)
     info = metadata["resolve"](ROOT)
-    if args.release and args.bundle_only:
+    if args.bundle_only:
         runtime = DESKTOP / "src-tauri" / "binaries" / WINDOWS_RUNTIME
         info = windows_package_build(runtime, info)
     os.environ.update(metadata["environment"](info))
@@ -523,8 +531,11 @@ WINDOWS_RUNTIME = "openaidr-runtime"
 def windows_package_build(runtime, selected):
     """Preserve the compiled build time while checking the signer's release selection."""
     info = metadata["validate"](json.loads((runtime / "runtime.json").read_text())["build"])
+    if info.get("desktop_edition", "standard") != selected.get("desktop_edition", "standard"):
+        raise ValueError("The staged Windows runtime uses a different desktop edition")
     for field in ("version", "source_commit", "source_timestamp", "published_at", "publication_timestamp"):
-        if info.get(field) != selected.get(field) or info.get(field) is None:
+        required = field in ("version", "source_commit", "source_timestamp")
+        if info.get(field) != selected.get(field) or (required and info.get(field) is None):
             raise ValueError("Windows binaries differ from the selected release")
     return info
 
@@ -664,8 +675,10 @@ def freeze(work, entry, name, runtime_options, windowed=False, onedir=False):
             "tzdata",
             "--add-data",
             f"{ROOT / 'src' / 'openaidr' / 'sensor' / 'hook_opencode.js'}{os.pathsep}openaidr/sensor",
-            "--add-data",
-            f"{ROOT / 'src' / 'openaidr' / 'sensor' / 'local_runtime_source.tar.gz'}{os.pathsep}openaidr/sensor",
+            *([] if os.environ.get("OPENAIDR_DESKTOP_EDITION") == "enterprise" else [
+                "--add-data",
+                f"{ROOT / 'src' / 'openaidr' / 'sensor' / 'local_runtime_source.tar.gz'}{os.pathsep}openaidr/sensor",
+            ]),
             "--add-data",
             f"{ROOT / 'src' / 'openaidr' / 'sensor' / 'cowork_plugin_client.py'}{os.pathsep}openaidr/sensor",
             "--collect-submodules",

@@ -75,6 +75,9 @@ fn evidence(webview: &tauri::WebviewWindow, scenario: &str, ocr: &std::path::Pat
     let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../build/e2e-startup");
     std::fs::create_dir_all(&directory).unwrap();
     let mut metrics = evaluate(webview, include_str!("../../e2e/startup-layout.js"));
+    let build: Value = serde_json::from_str(env!("OPENAIDR_BUILD_INFO")).unwrap();
+    let edition = build["desktop_edition"].as_str().unwrap_or("standard");
+    assert_eq!(metrics["edition"], edition, "Startup must test the compiled desktop edition");
     println!("{scenario}: {metrics}");
     std::fs::write(directory.join(format!("{scenario}.json")), serde_json::to_vec_pretty(&metrics).unwrap()).unwrap();
     // Capture this exact window without activation, reopen, scrolling, or resize.
@@ -98,7 +101,12 @@ fn evidence(webview: &tauri::WebviewWindow, scenario: &str, ocr: &std::path::Pat
         let output = std::process::Command::new(ocr).arg("--text").arg(&image).output().unwrap();
         assert!(output.status.success(), "Could not read startup screenshot: {}", String::from_utf8_lossy(&output.stderr));
         let text = String::from_utf8(output.stdout).unwrap();
-        let painted = ["Continue for free", "Connect organization", "Settings", "Check updates"].iter().all(|label| text.contains(label));
+        let labels = if edition == "enterprise" {
+            ["Connect your organization", "Enrollment link", "Settings", "Check updates"]
+        } else {
+            ["Continue for free", "Connect organization", "Settings", "Check updates"]
+        };
+        let painted = labels.iter().all(|label| text.contains(label));
         metrics["screenshot_text"] = json!(text);
         std::fs::write(directory.join(format!("{scenario}.json")), serde_json::to_vec_pretty(&metrics).unwrap()).unwrap();
         if painted { break; }

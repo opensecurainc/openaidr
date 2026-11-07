@@ -150,6 +150,14 @@ enum Request {
     LocalRuntimeCredentials {},
     #[serde(rename = "api-key.connect")]
     ApiKeyConnect { api_key: String },
+    #[serde(rename = "proxy.status")]
+    ProxyStatus {},
+    #[serde(rename = "proxy.test")]
+    ProxyTest { mode: String, #[serde(default)] url: String, #[serde(default)] bypass: Vec<String>,
+        #[serde(default)] username: String, #[serde(default)] password: Option<String> },
+    #[serde(rename = "proxy.save")]
+    ProxySave { mode: String, #[serde(default)] url: String, #[serde(default)] bypass: Vec<String>,
+        #[serde(default)] username: String, #[serde(default)] password: Option<String> },
     #[serde(rename = "setup")]
     Setup {},
     #[serde(rename = "desktop.capabilities")]
@@ -297,6 +305,11 @@ impl Request {
                 }
                 json!({"action":"api-key.connect","params":{"api_key":key}})
             }
+            Self::ProxyStatus {} => json!({"action":"proxy.status"}),
+            Self::ProxyTest { mode, url, bypass, username, password } =>
+                proxy_payload("proxy.test", mode, url, bypass, username, password)?,
+            Self::ProxySave { mode, url, bypass, username, password } =>
+                proxy_payload("proxy.save", mode, url, bypass, username, password)?,
             Self::Capabilities {} => json!({"action":"desktop.capabilities"}),
             Self::Support {} => return Err("Support must be handled by the desktop app.".into()),
             Self::Dashboard { .. } => return Err("Dashboard links must be handled by the desktop app.".into()),
@@ -702,6 +715,23 @@ fn newer_build(incoming: &str, existing: &str, new: &Value, old: &Value) -> bool
     }
 }
 
+/// Bounds proxy settings from the window. The sensor validates them fully and keeps
+/// the password only in the system credential store.
+fn proxy_payload(action: &str, mode: String, url: String, bypass: Vec<String>, username: String,
+    password: Option<String>) -> Result<Value, String> {
+    if mode == "direct" {
+        return Ok(json!({"action":action,"params":{"mode":"direct"}}));
+    }
+    if mode != "manual" || url.trim().is_empty() || url.len() > 2048 || bypass.len() > 64
+        || bypass.iter().any(|host| host.is_empty() || host.len() > 255) || username.len() > 256
+        || password.as_ref().is_some_and(|value| value.is_empty() || value.len() > 1024) {
+        return Err("Enter valid proxy settings.".into());
+    }
+    let mut params = json!({"mode":"manual","url":url.trim(),"bypass":bypass,"username":username.trim()});
+    if let Some(password) = password { params["password"] = json!(password); }
+    Ok(json!({"action":action,"params":params}))
+}
+
 fn bridge(executable: &Path, payload: Value) -> Result<Value, String> {
     bridge_pending(executable, payload, None)
 }
@@ -715,7 +745,7 @@ fn bridge_reporting(executable: &Path, payload: Value, preview: Option<PreviewCa
     let timeout = match payload["action"].as_str() {
         Some("local-runtime.prepare" | "local-runtime.docker-setup") => 1860,
         Some("local-runtime.start" | "desktop.resume") => 300,
-        Some("enrollment.connect" | "free.connect" | "api-key.connect" | "local-runtime.connect" | "desktop.remove" | "desktop.purge") => 180,
+        Some("enrollment.connect" | "free.connect" | "api-key.connect" | "local-runtime.connect" | "desktop.remove" | "desktop.purge" | "proxy.save") => 180,
         _ => 60,
     };
     let output_limit = if payload["action"] == "usage.summary" || payload["action"] == "alerts.list" { 8 * 1024 * 1024 } else { 1024 * 1024 };
@@ -1598,6 +1628,27 @@ mod tests {
             request[extra] = json!("untrusted");
             assert!(serde_json::from_value::<Request>(request).is_err());
         }
+    }
+
+    #[test]
+    fn proxy_requests_forward_bounded_settings_only() {
+        let request = |value: Value| serde_json::from_value::<Request>(value).map(Request::payload);
+        assert_eq!(request(json!({"action":"proxy.status"})).unwrap().unwrap(), json!({"action":"proxy.status"}));
+        assert_eq!(request(json!({"action":"proxy.save","mode":"direct","url":"http://ignored:1"})).unwrap().unwrap(),
+            json!({"action":"proxy.save","params":{"mode":"direct"}}));
+        let manual = json!({"action":"proxy.test","mode":"manual","url":" http://proxy.example:3128 ",
+            "bypass":["internal.example"],"username":"svc","password":"pw"});
+        assert_eq!(request(manual.clone()).unwrap().unwrap(), json!({"action":"proxy.test","params":{
+            "mode":"manual","url":"http://proxy.example:3128","bypass":["internal.example"],"username":"svc","password":"pw"}}));
+        for (field, value) in [("mode", json!("system")), ("url", json!("")), ("url", json!("x".repeat(2049))),
+            ("bypass", json!(vec!["h"; 65])), ("username", json!("u".repeat(257))), ("password", json!(""))] {
+            let mut invalid = manual.clone();
+            invalid[field] = value;
+            assert_eq!(request(invalid).unwrap().unwrap_err(), "Enter valid proxy settings.");
+        }
+        let mut extra = manual;
+        extra["server_url"] = json!("https://untrusted.example");
+        assert!(request(extra).is_err());
     }
 
     #[test]

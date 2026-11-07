@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from './fixtures';
 import {NativeUI} from '../e2e/native-ui';
 
 // Exercise the driver against real page navigation. Only the native WebDriver

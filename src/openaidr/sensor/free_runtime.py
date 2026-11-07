@@ -22,6 +22,7 @@ from openaidr.core.policy import ACTIONS, Policy
 from openaidr.core.protocol import default_sensor_config
 from openaidr.server.guardrail.evidence import event_evidence
 from .free_enrollment import prepare
+from . import network_proxy
 from .usage import identity
 
 
@@ -209,6 +210,8 @@ class FreeClient:
                 rule_id TEXT NOT NULL, rule_name TEXT NOT NULL, reason TEXT NOT NULL)""")
             db.execute("""CREATE TRIGGER IF NOT EXISTS checks_delete_policy AFTER DELETE ON checks
                 BEGIN DELETE FROM check_policy WHERE id=OLD.id; END""")
+        if transport is None:
+            transport = network_proxy.async_transport(config, remote.origin, remote.verify())
         self.remote = GuardrailClient(remote, transport=transport)
         self.credential_generation = None
         self.on_auth_failure = None

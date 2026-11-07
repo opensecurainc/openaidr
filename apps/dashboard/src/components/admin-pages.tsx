@@ -935,9 +935,9 @@ export function EnrollmentPage() {
                   <p className="text-sm font-medium">{mdmInstall ? "Silent MDM installation" : "Install and connect this device"}</p>
                   <p className="text-sm text-muted-foreground">
                     {mdmInstall
-                      ? "Run through MDM as root or as the logged-in user on an Apple Silicon Mac. A new install needs write access to /Applications. Installs and connects without confirmation dialogs or opening the app. MDM manages app updates."
+                      ? "Run through MDM as root or as the logged-in user on a Mac with macOS 12 or later, Apple Silicon or Intel. A new install needs write access to /Applications. Installs and connects without confirmation dialogs or opening the app. MDM manages app updates."
                       : installPlatform === "mac"
-                      ? "Paste into Terminal on an Apple Silicon Mac."
+                      ? "Paste into Terminal on a Mac with macOS 12 or later, Apple Silicon or Intel."
                       : installPlatform === "windows"
                         ? "Paste into 64-bit PowerShell on Windows x64, without Run as administrator."
                         : "Paste into Terminal on Ubuntu or Debian x64. Requires Python 3, curl, GnuPG, and sudo access for package installation."}

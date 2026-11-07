@@ -4,8 +4,8 @@
     "sdk": {
       "distribution": "openaidr-api-client",
       "name": "openaidr_api_client-2026.11.4+376d40c-py3-none-any.whl",
-      "sha256": "f010a36634179aef5fc2c6c6b8fa1710d81e1b3e62b59ef356c6b3cae07e018f",
       "size": 75349,
+      "sha256": "f010a36634179aef5fc2c6c6b8fa1710d81e1b3e62b59ef356c6b3cae07e018f",
       "source": {
         "built_at": "2026-11-05T01:50:44+00:00",
         "source_commit": "376d40c2120f655ca4b91f6fcbc05ce2bd8a5c66",
@@ -16,8 +16,8 @@
     "common": {
       "distribution": "openaidr-common",
       "name": "openaidr_common-2026.10.28+70dc30c-py3-none-any.whl",
-      "sha256": "2cbacf7e9d42584cd066233d3317328f3d3b4eb80d271972b96305e28b061c75",
       "size": 10948,
+      "sha256": "2cbacf7e9d42584cd066233d3317328f3d3b4eb80d271972b96305e28b061c75",
       "source": {
         "built_at": "2026-10-28T08:06:59+00:00",
         "source_commit": "70dc30cc1cbe12786d56e61caeec346310bf1023",
