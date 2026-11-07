@@ -29,7 +29,7 @@ function environment(options = {}) {
             if (command === options.fail) throw new Error('Simulated failure');
             if (command === '/usr/bin/id') return options.root ? '0' : '501';
             if (command === '/usr/sbin/sysctl') return options.intel ? '0' : '1';
-            if (command === '/usr/bin/sw_vers') return '15.7';
+            if (command === '/usr/bin/sw_vers') return options.macos || '15.7';
             if (command === '/usr/bin/mktemp') {
                 return args.includes('-t') ? '/private/tmp/installer' : '/Applications/.openaidr-install.test';
             }
@@ -187,10 +187,18 @@ test('uncertain enrollment and launch failures do not resubmit the link', () => 
 });
 
 test('unsupported hosts stop before installation', () => {
-    for (const options of [{root: true}, {intel: true}]) {
+    for (const options of [{root: true}, {macos: '11.7.10'}, {intel: true, macos: '11.7'}]) {
         const {mac, calls} = environment(options);
-        assert.throws(() => script.install(mac), /normal macOS account|Apple Silicon/);
+        assert.throws(() => script.install(mac), /normal macOS account|macOS 12 \(Monterey\) or later/);
         assert.ok(!calls.some(call => call.command === 'confirm'));
+    }
+});
+
+test('the universal installer proceeds on Intel and Apple Silicon Macs with macOS 12 or later', () => {
+    for (const options of [{intel: true, macos: '12.7.6'}, {macos: '12.0'}, {intel: true}]) {
+        const {mac, calls} = environment(options);
+        assert.match(script.install(mac), /enrolled/);
+        assert.ok(calls.some(call => call.command === '/usr/bin/curl'));
     }
 });
 

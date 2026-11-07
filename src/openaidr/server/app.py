@@ -2364,7 +2364,7 @@ class Service:
     def dispatch(self, request):
         path = request.url.path
         try:
-            if not PLATFORM_AVAILABLE and path.startswith(("/admin/", "/management/", "/reporting/", "/platform/")):
+            if not PLATFORM_AVAILABLE and path.startswith(("/admin/", "/management/", "/reporting/", "/platform/", "/website/")):
                 raise APIError(404, "no such route")
             if path.startswith("/internal/v1/skill-scans/"):
                 from .skill_scanning import worker_request

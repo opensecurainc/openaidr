@@ -44,6 +44,8 @@ class Config:
     summary_report_token: str = field(default="", repr=False)
     summary_report_tokens: dict = field(default_factory=dict, repr=False)
     summary_report_bucket: str = ""
+    website_origin: str = ""
+    website_service_token_sha256: str = field(default="", repr=False)
     tenant_id: str = ""
     require_tenant: bool = False
     auth_mode: str = "local"
@@ -164,7 +166,7 @@ class Config:
                   self.api_operations_enabled, self.api_operations_origin, self.api_operations_token_file,
                   self.api_operations_ca_file, self.api_operations_alert_rules,
                   self.summary_report_tokens,
-                  self.summary_report_bucket))):
+                  self.summary_report_bucket, self.website_origin, self.website_service_token_sha256))):
             raise ValueError("Cloud services require the private platform package")
         if self.dashboard_mcp_enabled:
             from urllib.parse import urlsplit
@@ -290,6 +292,8 @@ def from_env():
         summary_report_token=env("SUMMARY_REPORT_TOKEN"),
         summary_report_tokens=json.loads(env("SUMMARY_REPORT_TOKENS", "{}")),
         summary_report_bucket=env("SUMMARY_REPORT_BUCKET"),
+        website_origin=env("WEBSITE_ORIGIN").rstrip("/"),
+        website_service_token_sha256=env("WEBSITE_SERVICE_TOKEN_SHA256").lower(),
         tenant_id=env("TENANT_ID"),
         require_tenant=env("REQUIRE_TENANT", "false").lower() in ("true", "1"),
         auth_mode=env("AUTH_MODE", "local"),

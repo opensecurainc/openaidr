@@ -81,6 +81,57 @@ test("credit balance and feature usage remain readable with keyboard and touch",
   expect(requests).not.toContain("/api/v1/costs/detections");
 });
 
+test("feature usage defaults to highest credits and sorts both numeric columns", async ({ page }) => {
+  await mockChartData(page);
+  await page.route("**/api/v1/credits?**", route => {
+    const data = creditFixture(new URL(route.request().url()).searchParams.get("range")!);
+    data.by_service.find(row => row.service === "guardrail")!.operations = 1234;
+    data.by_service.find(row => row.service === "url_reputation")!.credits_charged = "2.000000";
+    Object.assign(data.by_service.find(row => row.service === "rule_generation")!, { credits_charged: "0.000000", operations: 0 });
+    data.by_service.find(row => row.service === "package_vulnerabilities")!.credits_charged = null;
+    return route.fulfill({ json: data });
+  });
+  await page.goto("/costs/openaidr");
+  const table = page.getByRole("table", { name: "Credit usage by feature" });
+  const creditsHeader = table.getByRole("columnheader", { name: "Credits used", exact: true });
+  const operationsHeader = table.getByRole("columnheader", { name: "Operations", exact: true });
+  const features = table.locator("tbody tr td:first-child");
+  const credits = table.locator("tbody tr td:nth-child(3)");
+  const operations = table.locator("tbody tr td:nth-child(2)");
+  await expect(creditsHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(operationsHeader).toHaveAttribute("aria-sort", "none");
+  await expect(features).toHaveText(["Investigations", "URL reputation", "Application research", "Skill analysis", "Assistant", "Overview summaries", "Session summaries", "Live Guardrail", "Rule generation", "Package vulnerabilities"]);
+  await expect(credits).toHaveText(["10", "2", "1", "0.5", "0.4", "0.1", "0.1", "0.02", "0", "Unavailable"]);
+
+  await creditsHeader.getByRole("button").focus();
+  await page.keyboard.press("Enter");
+  await expect(creditsHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(credits).toHaveText(["0", "0.02", "0.1", "0.1", "0.4", "0.5", "1", "2", "10", "Unavailable"]);
+  await page.keyboard.press("Space");
+  await expect(creditsHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(credits).toHaveText(["10", "2", "1", "0.5", "0.4", "0.1", "0.1", "0.02", "0", "Unavailable"]);
+
+  await operationsHeader.getByRole("button").click();
+  await expect(operationsHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(creditsHeader).toHaveAttribute("aria-sort", "none");
+  await expect(operations).toHaveText(["1,234", "20", "20", "4", "2", "2", "2", "1", "1", "0"]);
+  await expect(features.first()).toHaveText("Live Guardrail");
+  await operationsHeader.getByRole("button").click();
+  await expect(operationsHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(operations).toHaveText(["0", "1", "1", "2", "2", "2", "4", "20", "20", "1,234"]);
+
+  await page.getByRole("button", { name: "Refresh credits" }).click();
+  await expect(operationsHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(operations).toHaveText(["0", "1", "1", "2", "2", "2", "4", "20", "20", "1,234"]);
+  await page.getByRole("button", { name: "30d", exact: true }).click();
+  await expect(page.getByText("Daily credit usage · UTC", { exact: true })).toBeVisible();
+  await expect(operationsHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(operations).toHaveText(["0", "1", "1", "2", "2", "2", "4", "20", "20", "1,234"]);
+  await creditsHeader.getByRole("button").click();
+  await expect(creditsHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(credits).toHaveText(["10", "2", "1", "0.5", "0.4", "0.1", "0.1", "0.02", "0", "Unavailable"]);
+});
+
 test("disabled, missing rates, unavailable balances and empty history stay distinct", async ({ page }, info) => {
   await mockChartData(page);
   let data = inactiveCredits("disabled");
