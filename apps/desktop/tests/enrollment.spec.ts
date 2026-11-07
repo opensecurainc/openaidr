@@ -1,10 +1,11 @@
-import { test, expect, type Page, type Locator } from '@playwright/test';
+import { test, expect, type Page, type Locator } from './fixtures';
 import config from '../src-tauri/tauri.conf.json' with {type:'json'};
 import {NativeUI} from '../e2e/native-ui';
 import {exerciseAppControls} from '../e2e/native-flows';
 import {execFileSync, spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {createServer} from 'node:http';
+import {readFileSync} from 'node:fs';
 
 const link = 'https://tenant.example/enroll#token=oaet_' + 'a'.repeat(43);
 const preview = {server_url:'https://tenant.example',tenant:{id:'01000000-0000-7000-8000-000000000001',name:'Example organization'},auth_mode:'bearer',expires_at:'2099-01-01T00:00:00Z'};
@@ -315,7 +316,7 @@ async function boot(page: Page, mock: Mock) {
   }, mock);
   await page.goto('/');
   // Enrollment-form cases take the organization path; onboarding cases keep both choices.
-  if (mock.status.enrolled === false && !mock.setupChoices && !mock.statusError && mock.pendingAction !== 'status') {
+  if (process.env.OPENAIDR_DESKTOP_EDITION !== 'enterprise' && mock.status.enrolled === false && !mock.setupChoices && !mock.statusError && mock.pendingAction !== 'status') {
     await page.getByRole('button', {name:'Connect organization',exact:true}).click();
   }
 }
@@ -956,11 +957,12 @@ test('Denied checks preserve existing labels and notes until a user reports a mi
   }
 });
 
-test('native control flow selects Guardrails buttons separately from Usage icons', async ({page}) => {
+for (const profiles of [false, true]) test(`native control flow selects Guardrails buttons separately from Usage icons ${profiles ? 'with Codex profiles' : 'with legacy status'}`, async ({page}) => {
   test.slow();
   const status = {...converged,control_ready:true,heartbeat:{last_success_at:new Date().toISOString()},
     telemetry:{...converged.telemetry,codex_available:true,codex_installed:true,codex_current:true,claude_available:false},
     hooks:{codex:guardrailStatus().hooks.codex}};
+  if (profiles) Object.assign(status.hooks.codex, {profiles:[{...status.hooks.codex,name:'.codex'}]});
   const activity = guardrailActivity();
   activity.recent[0].product = 'codex-cli';
   await boot(page, {status,usage:populatedUsage(),guardrails:activity,maxWindowHeight:720,
@@ -976,6 +978,8 @@ test('native control flow selects Guardrails buttons separately from Usage icons
     sensorStatus:() => page.evaluate(() => (window as unknown as {mock:Mock}).mock.status)});
   await native.healthy();
   expect((await requests(page)).filter(row => row.action === 'guardrails.configure').map(row => row.enabled)).toEqual([false,true,true]);
+  expect((await requests(page)).filter(row => row.action === 'guardrails.configure').map(row => row.profile)).toEqual(
+    Array(3).fill(profiles ? status.hooks.codex.config_path : undefined));
   await expect(page.locator('#usage-panel')).toBeVisible();
 });
 
@@ -989,6 +993,10 @@ for (const maxWindowHeight of [720,320]) {
     await page.getByRole('group', {name:'Usage period',exact:true}).getByRole('button',{name:'24 hours'}).click();
     await page.getByRole('tab', {name:'Guardrails',exact:true}).click();
     await expect(page.locator('#usage-panel')).toBeHidden();
+    const heading = page.locator('#guardrails-page .usage-heading');
+    await expect(heading.getByRole('heading', {name:'Guardrails',exact:true})).toBeInViewport({ratio:1});
+    await expect(heading.getByText('This device', {exact:true})).toHaveCount(0);
+    await expect(heading.getByRole('group', {name:'Guardrail period',exact:true})).toBeInViewport({ratio:1});
     await expect(page.locator('#guardrails-completed')).toHaveText('1,240');
     await expect(page.locator('#guardrails-deny-label')).toHaveText('Would deny');
     await expect(page.locator('#guardrails-exceptions')).toHaveText('3 checks unavailable');
@@ -4900,6 +4908,8 @@ for (const maxWindowHeight of [720,240]) {
       win.completeRequest();
     });
     await expect(page.locator('#health-title')).toHaveText('Welcome to OpenAIDR');
+    await expect(page.locator('#resume-app')).toBeHidden();
+    expect((await requests(page)).some(request => request.action === 'desktop.resume')).toBe(false);
     // Let ResizeObserver process the new content while fitting is suspended.
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await page.evaluate(() => {
@@ -7606,12 +7616,12 @@ for (const maxWindowHeight of [720,320]) {
     const progress = page.locator('#local-progress');
     await expect(progress.locator('.active')).toHaveText('Prepare Docker');
     const app = page.locator('#app');
-    expect(await app.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await expect.poll(() => app.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     if (maxWindowHeight === 720) {
-      expect(await app.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
+      await expect.poll(() => app.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
       await expect(progress).toBeInViewport({ratio:1});
     } else {
-      expect(await app.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+      await expect.poll(() => app.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
       await progress.scrollIntoViewIfNeeded();
       await expect(progress).toBeInViewport({ratio:1});
     }
@@ -7742,7 +7752,7 @@ test('closing Settings dismisses local setup and permits opening it again', asyn
 
 function postureFixture(local = false) {
   const item = (id:string,name:string,kind:string,attention = false) => ({id,name,kind,source:'Organization inventory',path:`/Users/example/Projects/website/${id}`,
-    version:'1.2.3',publisher:'Publisher',scope:'User',last_seen_at:'2026-11-04T19:51:00Z',root_status:'ok',product:null as string|null,attention,
+    version:'1.2.3' as string|null,publisher:'Publisher' as string|null,scope:'User',last_seen_at:'2026-11-04T19:51:00Z',root_status:'ok',product:null as string|null,attention,
     approval_status:attention ? 'unapproved' : 'approved',assessment_status:'complete',findings:attention ? [{title:'Review changed configuration',detail:'The installed configuration differs from the previously reviewed version.'}] : [],findings_truncated:false,metadata:{} as Record<string,unknown>});
   const apps = [item('cursor','Cursor','AI editor',true),item('codex','Codex','Coding agent'),item('claude','Claude Code','Coding agent'),item('hermes','Hermes','AI agent')];
   apps.forEach((asset,i) => { asset.product = ['cursor','codex','claude-code','hermes'][i]; asset.findings = []; asset.assessment_status = 'unsupported'; });
@@ -7771,8 +7781,23 @@ test('Posture navigates real app pages, searches loaded assets, and preserves fi
   await page.getByRole('tab',{name:'Usage',exact:true}).focus(); await page.keyboard.press('End');
   await expect(page.getByRole('tab',{name:'Posture',exact:true})).toBeFocused();
   await expect(page.locator('.posture-stat strong')).toHaveText(['4','8','8']);
+  await expect(page.locator('#posture-attention .posture-row-copy small')).toHaveText(['Awaiting review','Dependency advisory reported','Changed instructions']);
+  await expect(page.locator('#posture-configure')).toBeHidden();
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(page.locator('.posture-stat strong')).toHaveText(['4','8','8']);
+  for (const tab of ['apps','components','skills','overview']) {
+    await page.locator(`#posture-${tab}-tab`).click();
+    await expect(page.locator(`#posture-${tab}-tab`)).toHaveAttribute('aria-selected','true');
+  }
   await page.getByRole('button',{name:'View AI Apps',exact:true}).click();
   await expect(page.locator('#posture-rows .posture-row')).toHaveCount(4);
+  await expect(page.getByRole('searchbox')).toHaveAttribute('placeholder','Search apps');
+  await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('1.2.3 · Publisher');
+  await page.locator('#posture-rows .posture-row').first().click();
+  await expect(page.locator('.posture-facts')).toContainText('KindAI editor');
+  await expect(page.locator('.posture-facts')).toContainText('SourceOrganization inventory');
+  await expect(page.locator('.posture-facts')).toContainText('Version1.2.3');
+  await page.getByRole('button',{name:'Close asset details'}).click();
   await page.getByRole('checkbox',{name:'Needs attention',exact:true}).check();
   await expect(page.locator('#posture-rows .posture-row')).toHaveCount(1);
   await page.getByRole('checkbox',{name:'Needs attention',exact:true}).uncheck();
@@ -7781,20 +7806,27 @@ test('Posture navigates real app pages, searches loaded assets, and preserves fi
   await page.getByRole('searchbox',{name:'Search loaded assets'}).fill('no-match');
   await expect(page.locator('#posture-rows')).toContainText('No matching assets');
   await page.getByRole('tab',{name:'Supply Chain',exact:true}).click();
+  await expect(page.getByRole('searchbox')).toHaveAttribute('placeholder','Search components');
+  await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('MCP server · 1.2.3 · Publisher');
   await expect(page.locator('#posture-rows .posture-badge')).toHaveText(Array(6).fill('Not assessed'));
   await page.getByRole('button',{name:'Next asset page'}).click();
-  await expect(page.locator('#posture-result')).toHaveText('7–8 of 8 loaded components');
+  await expect(page.locator('#posture-result')).toHaveText('7–8 of 8 components');
+  await page.getByRole('button',{name:'Previous asset page'}).click();
+  await expect(page.locator('#posture-result')).toHaveText('1–6 of 8 components');
+  await page.getByRole('button',{name:'Next asset page'}).click();
   await page.getByRole('button',{name:/Example parser/}).click();
   await expect(page.getByRole('dialog')).toContainText('1 finding');
   await expect(page.getByRole('dialog')).toContainText('Assessment: Complete');
-  await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Close asset details'}).click();
   await page.getByRole('tab',{name:'AI Skills',exact:true}).click();
+  await expect(page.getByRole('searchbox')).toHaveAttribute('placeholder','Search skills');
+  await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('1.2.3 · Publisher');
   await page.locator('#posture-rows .posture-row').first().click();
   await expect(page.getByRole('dialog',{name:'deploy-preview'})).toContainText(evidence);
   await expect(page.getByRole('dialog')).toContainText('Additional findings are available in the dashboard.');
   await expect(page.getByRole('dialog').locator('a, img')).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as {postureInjected?:boolean}).postureInjected)).toBeUndefined();
-  await page.keyboard.press('Escape');
+  await page.locator('#posture-done').click();
   await expect(page.locator('#posture-rows .posture-row').first()).toBeFocused();
   await page.locator('#posture-rows .posture-row').first().click();
   await page.evaluate(async () => {
@@ -7815,6 +7847,16 @@ for (const local of [false,true]) for (const colorScheme of ['light','dark'] as 
   test(`Posture layout fits ${colorScheme} at ${maxWindowHeight}px with populated ${local ? 'local' : 'organization'} inventory`, async ({page},testInfo) => {
     await page.emulateMedia({colorScheme});
     const posture = postureFixture(local);
+    if (!local) {
+      const apps = posture.groups.apps.items;
+      posture.groups.apps = {items:Array.from({length:7},(_,i) => ({...apps[i%apps.length],id:`app-${i}`,attention:true,approval_status:'approved'})),total:7,truncated:false};
+      const component = posture.groups.components.items[0];
+      posture.groups.components = {items:Array.from({length:200},(_,i) => ({...component,id:`component-${i}`,name:`${component.name} ${i+1}`,attention:true})),total:474,truncated:true};
+      const skill = {...posture.groups.skills.items[0],version:null,publisher:null,source:'openaidr-skills'};
+      posture.groups.skills = {items:Array.from({length:159},(_,i) => ({...skill,id:`skill-${i}`,name:i ? `code-review-${i}` : skill.name})),total:159,truncated:false};
+      posture.coverage.status = 'partial'; posture.coverage.sources[0].status = 'partial';
+      posture.coverage.sources[0].message = 'Some inventory sources could not be read.';
+    }
     posture.groups.skills.items[0].path = '/Users/example/Projects/customer-website/.claude/skills/deploy-preview/SKILL.md';
     await boot(page,{status:local ? freeStatus() : guardrailStatus(),posture,maxWindowHeight});
     await page.getByRole('tab',{name:'Posture',exact:true}).click();
@@ -7822,6 +7864,12 @@ for (const local of [false,true]) for (const colorScheme of ['light','dark'] as 
     const app = page.locator('#app');
     for (const name of ['Overview','AI Apps','Supply Chain','AI Skills']) {
       await page.getByRole('tab',{name,exact:true}).click();
+      await expect(page.locator('.posture-heading p')).toHaveCount(0);
+      if (name === 'Overview' && !local) {
+        await expect(page.locator('.posture-stat strong')).toHaveText(['7','474','159']);
+        await expect(page.locator('#posture-attention-count')).toHaveText('366 loaded');
+        await expect(page.locator('#posture-attention .posture-row-copy small')).toHaveCount(0);
+      }
       if (local && name === 'Overview') {
         await page.getByRole('button',{name:'Enable automatic checks'}).scrollIntoViewIfNeeded();
         await expect(page.getByRole('button',{name:'Enable automatic checks'})).toBeInViewport({ratio:1});
@@ -7834,11 +7882,48 @@ for (const local of [false,true]) for (const colorScheme of ['light','dark'] as 
       if (maxWindowHeight === 720) {
         await expect(page.locator('#status-footer')).toBeInViewport({ratio:1});
         expect(await app.evaluate(node => node.scrollHeight <= node.clientHeight+1)).toBe(true);
+        if (!local) expect(await page.locator('main').evaluate(node => node.getBoundingClientRect().height)).toBeLessThanOrEqual(name === 'Overview' ? 580 : 640);
         await page.screenshot({path:testInfo.outputPath(`posture-${name.replaceAll(' ','-')}-${colorScheme}.png`),animations:'disabled'});
       } else {
+        if (name !== 'Overview') {
+          const next = page.getByRole('button',{name:'Next asset page'});
+          await next.scrollIntoViewIfNeeded();
+          await expect(next).toBeInViewport({ratio:1});
+          if (name === 'AI Apps' && local) await expect(next).toBeDisabled();
+          else {
+            await next.click();
+            await expect(page.locator('#posture-page-number')).toContainText('2 /');
+            await page.getByRole('button',{name:'Previous asset page'}).click();
+          }
+        }
         await page.locator('#show-about').scrollIntoViewIfNeeded();
         await expect(page.locator('#show-about')).toBeInViewport({ratio:1});
         expect(await app.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+      }
+      if (name === 'Overview') {
+        const summary = page.locator('#posture-coverage-details summary');
+        await summary.scrollIntoViewIfNeeded();
+        await expect(summary).toBeInViewport({ratio:1});
+        if (!local) {
+          await expect(summary).toContainText('Supply Chain: 200 of 474 loaded');
+          await expect(summary).toHaveAccessibleDescription('Collection incomplete Supply Chain: 200 of 474 loaded');
+        }
+        await expect(page.locator('#posture-collected')).toBeHidden();
+        await summary.focus(); await page.keyboard.press('Enter');
+        await expect(page.locator('#posture-collected')).toBeVisible();
+        await expect(page.locator('#posture-sources')).toContainText(local ? 'Some skill files could not be read.' : 'Some inventory sources could not be read.');
+        await page.locator('#posture-sources').scrollIntoViewIfNeeded();
+        await expect(page.locator('#posture-sources')).toBeInViewport({ratio:1});
+        expect(await app.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+        await summary.focus(); await page.keyboard.press('Enter');
+        await expect(page.locator('#posture-sources')).toBeHidden();
+      } else if (!local) {
+        await expect(page.locator('#posture-loaded')).toHaveText('Supply Chain: 200 of 474 loaded');
+        if (name === 'Supply Chain') await expect(page.locator('#posture-result')).toHaveText('1–6 of 200 loaded components');
+        if (name === 'AI Skills') {
+          await expect(page.locator('#posture-result')).toHaveText('1–6 of 159 skills');
+          await expect(page.locator('#posture-rows .posture-row-copy small').first()).toHaveText('openaidr-skills');
+        }
       }
     }
     await page.locator('#posture-rows .posture-row').first().click();
@@ -7863,7 +7948,6 @@ for (const connection_mode of ['free','api_key']) {
       await page.getByRole('tab',{name,exact:true}).click();
       await expect(page.locator('#posture-review-column')).toHaveText('Assessment');
       await expect(page.locator('#posture-rows .posture-badge').first()).toHaveText(label);
-      if (name === 'AI Apps') await expect(page.locator('#posture-description')).toHaveText('Known AI apps found on this device');
       await page.locator('#posture-rows .posture-row').first().click();
       await expect(page.getByRole('dialog')).toContainText(`Assessment: ${label}`);
       await expect(page.getByRole('dialog')).not.toContainText(/organization|administrator|dashboard/i);
@@ -7882,9 +7966,14 @@ test('Posture distinguishes truncated, partial, empty, unavailable, and failed d
   await page.getByRole('tab',{name:'Posture',exact:true}).click();
   await expect(page.locator('#posture-note')).toContainText('AI Apps: 4 of 250 loaded');
   await expect(page.locator('#posture-attention-count')).toHaveText('3 loaded');
-  await expect(page.locator('#posture-coverage-title')).toHaveText('Collection is incomplete');
-  await page.getByText('Collection details',{exact:true}).click();
+  await expect(page.locator('#posture-coverage-title')).toHaveText('Collection incomplete');
+  await expect(page.locator('#posture-loaded')).toBeVisible();
+  await expect(page.locator('#posture-loaded')).toHaveText('AI Apps: 4 of 250 loaded');
+  await page.locator('#posture-coverage-details summary').click();
   await expect(page.locator('#posture-sources')).toContainText('A source could not be read.');
+  await expect(page.locator('#posture-note')).toBeVisible();
+  await expect(page.locator('#posture-note')).toContainText('Search and attention counts cover loaded records only.');
+  await expect(page.locator('#posture-note')).toContainText('Organization approval is separate from security assessment.');
   await page.evaluate(() => { (window as unknown as {mock:Mock}).mock.postureError = 'Server could not be reached.'; });
   await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(page.locator('#posture-message')).toContainText('Showing previously loaded posture. Server could not be reached.');
@@ -7899,6 +7988,7 @@ test('Posture distinguishes truncated, partial, empty, unavailable, and failed d
   await page.evaluate(value => { (window as unknown as {mock:Mock}).mock.posture = value; },empty);
   await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(page.locator('#posture-coverage-title')).toHaveText('Collection unavailable');
+  await expect(page.locator('#posture-loaded')).toBeHidden();
   await page.getByRole('tab',{name:'AI Apps',exact:true}).click();
   await expect(page.locator('#posture-rows')).toContainText('No assets have been reported');
 });

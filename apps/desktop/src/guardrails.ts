@@ -70,7 +70,7 @@ export function initGuardrails(request:Request, configure:Request, visible:() =>
   const panel = document.createElement('section');
   panel.id = 'guardrails-page'; panel.hidden = true; panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', 'guardrails-tab');
   panel.innerHTML = `
-    <div class="usage-heading"><div class="guardrail-title"><h1>Guardrails</h1><span>This device</span></div>
+    <div class="usage-heading"><h1>Guardrails</h1>
       <div class="usage-period" role="group" aria-label="Guardrail period"><button tabindex="0" type="button" data-days="1" aria-pressed="true">24 hours</button><button tabindex="0" type="button" data-days="30" aria-pressed="false">30 days</button></div></div>
     <div class="guardrail-overview"><section class="usage-card guardrail-summary" aria-label="Guardrail activity">
       <div class="guardrail-summary-heading"><h2>Guardrail actions</h2><button tabindex="0" class="text-button" id="guardrails-view" aria-expanded="false" aria-controls="guardrails-activity" disabled>View activity</button></div>

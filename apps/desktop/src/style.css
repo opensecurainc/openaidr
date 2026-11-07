@@ -189,7 +189,6 @@ h1{margin:0;font-size:16px;line-height:20px;font-weight:650;letter-spacing:-.3px
 .usage-axis{font-size:10px;color:var(--muted);margin-top:4px}.usage-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0 0}.usage-metrics>div{padding:2px 0 2px 12px;border-left:1px solid var(--border)}.usage-metrics>div:first-child{padding-left:0;border-left:0}.usage-metrics dt{font-size:11px;color:var(--muted)}.usage-metrics dd{margin:0;font-weight:650;font-size:18px;line-height:24px;letter-spacing:-.3px;font-variant-numeric:tabular-nums}
 .usage-breakdowns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:8px}.usage-rows{max-height:116px;overflow:auto;overscroll-behavior:contain}.usage-row{margin-top:5px}.usage-row>div:first-child{font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}.usage-row span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.usage-row span+span{flex-shrink:0}.usage-track{height:4px;background:var(--hover);border-radius:2px;overflow:hidden;margin-top:3px}.usage-track>div{height:100%;background:var(--accent);border-radius:2px}
 
-.guardrail-title{display:flex;align-items:baseline;gap:8px}.guardrail-title>span{color:var(--muted);font-size:11px}
 .guardrail-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start}
 .guardrail-overview>.usage-card{min-width:0;min-height:120px}
 .guardrail-summary-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -287,6 +286,7 @@ input::placeholder{color:var(--muted)}
 .enrollment-link-entry button{flex-shrink:0}
 #connect-card{border:0;background:transparent;box-shadow:none;padding:0}
 .connection-intro{margin:8px 0 14px;color:var(--muted);font-size:12px}
+#connection-options.enterprise-connection{grid-template-columns:minmax(0,1fr)}
 #connection-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .connection-option.card{min-width:0;margin:0;padding:14px;display:flex;flex-direction:column}
 .connection-option h3{margin:0;font-size:15px;line-height:21px;font-weight:650;letter-spacing:-.25px}

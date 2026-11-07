@@ -19,7 +19,9 @@ analysis = Analysis(
         (str(work / "_build.json"), "openaidr"),
         (str(metadata), metadata.name),
         (str(root / "src/openaidr/sensor/hook_opencode.js"), "openaidr/sensor"),
-        (str(root / "src/openaidr/sensor/local_runtime_source.tar.gz"), "openaidr/sensor"),
+        *([] if info.get("desktop_edition") == "enterprise" else [
+            (str(root / "src/openaidr/sensor/local_runtime_source.tar.gz"), "openaidr/sensor"),
+        ]),
         (str(root / "src/openaidr/sensor/cowork_plugin_client.py"), "openaidr/sensor"),
         *collect_data_files("openaidr_common"),
     ],

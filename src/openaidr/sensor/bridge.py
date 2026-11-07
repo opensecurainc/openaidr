@@ -21,7 +21,7 @@ from openaidr.core.cloud_protection import project as cloud_protection
 from openaidr.core.event import now
 from .config import IDENTITY_FIELDS, Config, configuration_lock
 from openaidr.core.files import atomic_write
-from . import hooks, integrations, network_proxy, service, updates
+from . import desktop_edition, hooks, integrations, network_proxy, service, updates
 from .runtime import NOT_ENROLLED, Client, check_reenrollment, discard_policy_cache, enroll
 from .telemetry import settings, token_fingerprint
 from .tls import same_origin, validate_ca_certificate
@@ -385,6 +385,7 @@ def status(config, *, deadline=None, private=False):
     hook_state["codex"]["profiles"][0]["available"] |= hook_state["codex"]["available"]
     return {
         "enrolled": config.enrolled(),
+        "enterprise_enrollment_required": desktop_edition.needs_organization(config),
         "connection_mode": config.get("connection_mode", "organization"),
         "sensor_id": config.get("sensor_id", ""),
         "server_url": config.get("server_url", ""),
@@ -433,6 +434,8 @@ def setup(config, *, require_control=False, match_version=False):
     """
     from .removal import marker
 
+    if desktop_edition.needs_organization(config):
+        raise ValueError(desktop_edition.MESSAGE)
     if marker(config).exists():
         raise ValueError("OpenAIDR removal was requested. Choose Install in the desktop app to resume collection.")
     if not config.enrolled():
@@ -935,6 +938,11 @@ def handle(request):
     action = request.get("action")
     if action not in ACTIONS:
         raise ValueError("unsupported bridge action")
+    if desktop_edition.enterprise_only():
+        if action == "local-runtime.dashboard":
+            return {"managed": False}
+        if action in ("free.connect", "api-key.connect") or action.startswith("local-runtime."):
+            raise ValueError(desktop_edition.MESSAGE)
     params = request.get("params") or {}
     if not isinstance(params, dict):
         raise ValueError("params must be an object")

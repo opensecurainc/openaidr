@@ -299,8 +299,10 @@ def test_publish_resumes_after_upload_failure_and_keeps_legacy_feed(rollout, pre
     completed = list(storage.uploads)
     storage.fail_name = None
     assert rollout.publish(prepared, storage, delivery(storage)) == VERSION
-    # The active feed goes live first; the three fixed download links follow it.
-    links = [f"{rollout.LATEST}/{name}" for _, name in sorted(rollout.LINKS.items())]
+    # The active feed goes live first; the fixed download links follow it. The
+    # universal Mac DMG also serves the Intel link.
+    fixed = {**{name: target for target, name in rollout.LINKS.items()}, rollout.INTEL_LINK: "darwin-aarch64"}
+    links = [f"{rollout.LATEST}/{name}" for name in sorted(fixed)]
     expected = [(rollout.FEED, True)]
     for link in links:
         expected += [(link, False), (f"{rollout.REDIRECTS}/{link.rsplit('/', 1)[1]}.txt", False)]
@@ -322,7 +324,7 @@ def test_publish_resumes_after_upload_failure_and_keeps_legacy_feed(rollout, pre
     with zipfile.ZipFile(io.BytesIO(storage.objects[package][0])) as bundle:
         assert bundle.namelist() == [installer]
         assert bundle.read(installer) == b"native CI installer fixture"
-    for target, name in rollout.LINKS.items():
+    for name, target in fixed.items():
         link = f"{rollout.LATEST}/{name}"
         versioned = document["downloads"][target]["url"].removeprefix(rollout.ORIGIN + "/")
         assert storage.objects[link][0] == storage.objects[versioned][0]
@@ -505,7 +507,7 @@ def test_public_verification_failure_never_rolls_back_live_feed(rollout, prepare
 @pytest.mark.parametrize("case", [
     "windows_hash", "windows_commit", "windows_unsigned", "windows_shape",
     "windows_extra_entry", "windows_changed_installer", "windows_raw_exe",
-    "linux_signature", "notes", "page",
+    "linux_signature", "windows_edition", "linux_edition", "notes", "page",
 ])
 def test_rejects_mismatched_or_tampered_handoff_before_writing(rollout, prepared, case):
     package = next((prepared / "windows").glob("*.zip"))
@@ -523,8 +525,16 @@ def test_rejects_mismatched_or_tampered_handoff_before_writing(rollout, prepared
         info = json.loads(path.read_text())
         if case == "windows_shape":
             info = []
+        elif case == "windows_edition":
+            info["schema"] = "openaidr.windows-release.v1"
+            info["build"] = {**INFO, "desktop_edition": "enterprise"}
         else:
             info[{"windows_hash": "sha256", "windows_commit": "commit", "windows_unsigned": "authenticode"}[case]] = "invalid"
+        rollout.write_json(path, info)
+    elif case == "linux_edition":
+        path = prepared / "linux/build.json"
+        info = json.loads(path.read_text())
+        info["desktop_edition"] = "enterprise"
         rollout.write_json(path, info)
     elif case == "linux_signature":
         next((prepared / "linux").glob("*.deb.asc")).write_text("invalid signature")
@@ -560,15 +570,33 @@ def test_publish_retires_only_intel_macs_and_preserves_old_files(rollout, prepar
         return
     storage = MemoryStorage()
     storage.objects[rollout.FEED] = (json.dumps(previous).encode(), 1)
-    historical = {
-        "openaidr/latest/OpenAIDR-x86_64.dmg": (b"last Intel installer", 1),
-        "openaidr/2026.10.6+2b2b2b2/OpenAIDR-x86_64.dmg": (b"last Intel installer", 1),
-    }
-    storage.objects.update(historical)
+    historical = "openaidr/2026.10.6+2b2b2b2/OpenAIDR-x86_64.dmg"
+    link = f"{rollout.LATEST}/{rollout.INTEL_LINK}"
+    storage.objects[historical] = storage.objects[link] = (b"last Intel installer", 1)
+    storage.labels[link] = {"openaidr-version": previous["version"],
+                            "openaidr-publication-timestamp": str(previous["build"]["publication_timestamp"])}
     rollout.publish(prepared, storage, delivery(storage))
     assert json.loads(storage.objects[rollout.FEED][0]) == manifest
-    assert all(storage.objects[name] == contents for name, contents in historical.items())
-    assert not any("OpenAIDR-x86_64" in name for name, _ in storage.uploads)
+    assert storage.objects[historical] == (b"last Intel installer", 1)
+    # The fixed Intel link moves to the verified universal DMG; the feed lists no Intel updater.
+    assert storage.objects[link] == ((prepared / "macos/OpenAIDR-aarch64.dmg").read_bytes(), 2)
+    pointer = f"{rollout.REDIRECTS}/{rollout.INTEL_LINK}.txt"
+    assert storage.objects[pointer][0] == manifest["downloads"]["darwin-aarch64"]["url"].encode()
+    assert [name for name, _ in storage.uploads if "OpenAIDR-x86_64" in name] == [link, pointer]
+
+
+def test_new_mac_release_must_be_universal(rollout, prepared):
+    root = prepared.parent
+    artifacts = make_artifacts(root / "thin-artifacts", universal=False)
+    macos = root / "thin-macos"
+    rollout.release.manifest(VERSION, prepared / "macos/release-notes.md", artifacts, macos)
+    _, files = rollout.release_files(macos)
+    assert not rollout.universal_mac(files)
+    assert rollout.universal_mac(rollout.staged(prepared)[1])
+    with pytest.raises(ValueError, match="must be universal"):
+        rollout.prepare(macos, root / "windows", prepared / "linux",
+                        rollout.read_json(prepared / "release.json")["rollout"], root / "thin-rollout")
+    assert not (root / "thin-rollout").exists()
 
 
 def test_publication_order_retained_targets_and_legacy_bypass(rollout, prepared):
@@ -643,7 +671,7 @@ def test_public_manifest_delivery_uses_a_bounded_direct_request(rollout, monkeyp
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            requests.append((self.path, self.headers.get("Cache-Control")))
+            requests.append((self.path, self.headers.get("Cache-Control"), self.headers.get("User-Agent")))
             if response == "redirect" and self.path != "/redirected":
                 self.send_response(302)
                 self.send_header("Location", "/redirected")
@@ -669,7 +697,7 @@ def test_public_manifest_delivery_uses_a_bounded_direct_request(rollout, monkeyp
         else:
             with pytest.raises((ValueError, OSError)):
                 rollout.public_manifest()
-        assert requests[0] == ("/openaidr/rollout-v2.json", "no-cache")
+        assert requests[0] == ("/openaidr/rollout-v2.json", "no-cache", "OpenAIDR-release-verifier/1.0")
     finally:
         server.shutdown()
         server.server_close()

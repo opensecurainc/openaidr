@@ -9,12 +9,23 @@ const buttonKey = `(button) => button.id ? '#' + button.id
   : button.dataset.alertId ? '.alert-inbox-row'
   : (button.closest('dialog')?.id || 'app') + ': ' + (button.getAttribute('aria-label') || button.textContent.trim())`;
 
-// These controls require states outside an unsigned organization installation.
-// Installed-app workflows also run enrollment.spec.ts in Chromium and WebKit.
+// Browser fixtures cover review, inventory, billing, and proxy states that the
+// disposable organization does not seed. Enterprise publication runs these cases.
 const browserOnly: Record<string, string> = {
   '#continue-free': 'Hosted free enrollment uses a separate identity from this organization E2E: enrollment.spec.ts and test_sensor_free_enrollment.py',
   '#retry': 'Recovery after a status/setup failure: enrollment.spec.ts',
   '#update-primary': 'Signed-update availability and retry states: enrollment.spec.ts',
+  ...Object.fromEntries(['#guardrails-ask', '#guardrails-deny', '#denials-back', '#denials-close', '#denials-latest', '#denials-older',
+    '#denials-retry', '#denials-report', '#denials-save-note', '#denials-cancel-note'].map(selector =>
+    [selector, 'Retained evidence, review writes, pagination, and recovery: Ask inspection, Denied check, and Denial browser cases'])),
+  ...Object.fromEntries(['#posture-tab', '#posture-overview-tab', '#posture-apps-tab', '#posture-components-tab', '#posture-skills-tab',
+    '#posture-refresh', '#posture-next', '#posture-previous', '#posture-done', 'posture-detail: Close asset details'].map(selector =>
+    [selector, 'Populated organization inventory, pagination, and asset details: Posture browser cases'])),
+  '#posture-configure': 'Personal automatic checks are unavailable to organization connections; the enterprise Posture case checks this control is hidden',
+  ...Object.fromEntries(['#free-plan-toggle', '#free-plan-refresh'].map(selector =>
+    [selector, 'Organization billing balances and refresh: Connected enterprise-paid credits browser cases'])),
+  ...Object.fromEntries(['#proxy-settings', '#settings-proxy', '#cancel-proxy', '#save-proxy', '#test-proxy'].map(selector =>
+    [selector, 'Proxy credentials, test, save, and error states: network proxy browser cases'])),
 };
 
 export interface NativeDriver {
@@ -125,7 +136,7 @@ export class NativeUI {
       await expect.poll(async () => {
         layout = await this.evaluate('return ' + startupLayout);
         return (layout as {fits:boolean}).fits;
-      }, {timeout: 10_000, message: 'The first native window shows both setup choices without scrolling'}).toBe(true);
+      }, {timeout: 10_000, message: 'The first native window shows enrollment controls without scrolling'}).toBe(true);
     } finally {
       if (!layout) {
         try { layout = await this.evaluate('return ' + startupLayout); }
@@ -136,6 +147,11 @@ export class NativeUI {
   }
 
   async chooseOrganization() {
+    if (await this.evaluate("return document.querySelector('main')?.dataset.desktopEdition === 'enterprise';")) {
+      await this.visible('#enrollment-link');
+      expect(await this.evaluate("return ['#continue-free', '#choose-local-runtime', '#api-key-dialog'].every(selector => !document.querySelector(selector));")).toBe(true);
+      return;
+    }
     await this.click('#data-use');
     await this.text('#data-use-dialog', 'Shadow mode');
     await this.click('#close-data-use');
