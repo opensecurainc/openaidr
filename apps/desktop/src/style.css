@@ -475,3 +475,5 @@ input::file-selector-button{margin-right:8px}
 .proxy-choice input{width:auto;height:auto}
 #proxy-error{color:var(--danger);font-size:12px}
 #proxy-test-result[data-tone=error]{color:var(--danger)}
+.google-connection{margin-block:12px}
+.google-connection>.button{white-space:normal;max-width:100%;text-align:left}

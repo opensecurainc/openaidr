@@ -45,6 +45,9 @@ ACTIONS = {
     "enrollment.preview",
     "enrollment.connect",
     "free.connect",
+    "google.start",
+    "google.poll",
+    "google.connect",
     "local-runtime.check",
     "local-runtime.docker-setup",
     "local-runtime.prepare",
@@ -387,6 +390,8 @@ def status(config, *, deadline=None, private=False):
         "enrolled": config.enrolled(),
         "enterprise_enrollment_required": desktop_edition.needs_organization(config),
         "connection_mode": config.get("connection_mode", "organization"),
+        **({"google_account": {"email": config['google_account']['email']}}
+           if config.get('connection_mode') == 'api_key' and config.get('google_account') else {}),
         "sensor_id": config.get("sensor_id", ""),
         "server_url": config.get("server_url", ""),
         # The saved setting, for the connected status; never the password.
@@ -928,6 +933,43 @@ def connect_enrollment(config, params):
         return response
 
 
+def connect_google(config):
+    from .google_connection import activate
+
+    with configuration_lock(config.path):
+        config = Config.load(config.path)
+        if config.get('connection_mode') == 'api_key' and config.get('google_account'):
+            return activate(config)
+        if config.get('connection_mode') != 'free':
+            raise ValueError('Google sign-in requires this device\'s free connection.')
+        state, live = service.manage('status', config, timeout=5), live_status(config)
+        if live and state != 'running':
+            raise ValueError('Stop the manually started sensor before connecting your Google account.')
+        if state not in ('running', 'stopped', 'not installed'):
+            raise ValueError('Cannot verify the background service. Refresh and try again.')
+        if keep_existing((live or {}).get('version') or recorded_service_version(config), app_version(),
+                         (live or {}).get('build') or recorded_service_build(config)):
+            raise ValueError('Install the newer desktop app before changing this sensor\'s connection.')
+        if state == 'running':
+            if not live or live.get('sensor_id') != config['sensor_id'] or not same_origin(live.get('server_url', ''), config['server_url']):
+                raise ValueError('Cannot verify the running sensor. Refresh and try again.')
+            service.stop_and_wait(config)
+        try:
+            # Local collection remains local under both connections. Preserve its
+            # queues and history, but stop writers before publishing the new key.
+            result = activate(config)
+        except Exception:
+            if state == 'running':
+                service.manage('start', Config.load(config.path), timeout=15)
+            raise
+        if state == 'running':
+            try:
+                service.manage('start', Config.load(config.path), timeout=15)
+            except Exception:
+                result['service_error'] = 'Account connected, but the sensor could not restart. Retry setup.'
+        return result
+
+
 def handle(request):
     if not isinstance(request, dict) or set(request) - {
         "action",
@@ -941,7 +983,7 @@ def handle(request):
     if desktop_edition.enterprise_only():
         if action == "local-runtime.dashboard":
             return {"managed": False}
-        if action in ("free.connect", "api-key.connect") or action.startswith("local-runtime."):
+        if action in ("free.connect", "api-key.connect") or action.startswith(("local-runtime.", "google.")):
             raise ValueError(desktop_edition.MESSAGE)
     params = request.get("params") or {}
     if not isinstance(params, dict):
@@ -1057,6 +1099,12 @@ def handle(request):
         from .free_enrollment import activate
 
         return activate(config)
+    if action == 'google.connect':
+        return connect_google(config)
+    if action in ('google.start', 'google.poll'):
+        from .google_connection import request as google_request
+
+        return google_request(config, start=action == 'google.start')
     if action == "enroll":
         server, token = params.get("server_url"), params.get("token")
         if (

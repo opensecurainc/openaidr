@@ -31,7 +31,8 @@ def read(config, *, transport=None):
                     from . import network_proxy
 
                     transport = network_proxy.async_transport(config, connection.origin, connection.verify())
-                result = asyncio.run(desktop_credits.read(connection, 'free' if mode == 'free' else 'paid', transport=transport))
+                plan = 'free' if mode == 'free' else 'account' if config.get('google_account') else 'paid'
+                result = asyncio.run(desktop_credits.read(connection, plan, transport=transport))
             else:
                 client = Client.from_config(config)
                 try:

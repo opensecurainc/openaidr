@@ -9,7 +9,7 @@ from openaidr_api_client.client import IntelligenceClient
 from openaidr_api_client.contracts.credits import amount, microcredits, utc
 
 
-def project(value):
+def project(value, policy=None):
     if value is None:
         return None
     fields = {'status', 'allowance', 'used', 'reserved', 'available', 'starts_at', 'resets_at', 'checked_at'}
@@ -26,23 +26,28 @@ def project(value):
             raise ValueError('Disabled free usage has no balance')
     elif result['status'] in ('active', 'exhausted'):
         total, used, reserved, available = map(microcredits, amounts)
-        if not total or total != used + reserved + available or (result['status'] == 'exhausted') != (available == 0):
+        if (not total and policy != 'anonymous_trial') or total != used + reserved + available or (result['status'] == 'exhausted') != (available == 0):
             raise ValueError('Free usage does not reconcile')
-        if not utc(result['starts_at']) <= checked < utc(result['resets_at']):
+        if not utc(result['starts_at']) <= checked:
+            raise ValueError('Invalid free period')
+        if policy == 'anonymous_trial':
+            if result['resets_at'] is not None:
+                raise ValueError('A starter allowance does not renew')
+        elif not checked < utc(result['resets_at']):
             raise ValueError('Invalid free period')
     else:
         raise ValueError('Unknown free usage state')
     return result
 
 
-async def fetch(connection, transport):
+async def fetch(connection, transport, path='/v1/free/usage'):
     # A fixed additive endpoint is not in the pinned SDK's route allowlist yet.
     # Keep its same bounded response, TLS, redirect and environment-proxy rules.
     async with asyncio.timeout(5):
         async with httpx.AsyncClient(base_url=connection.origin, transport=transport, verify=connection.verify(), trust_env=False,
                 follow_redirects=False, timeout=5, headers={'Authorization':'Bearer ' + connection.api_key,
                 'Accept-Encoding':'identity'}) as client:
-            async with client.stream('GET', '/v1/free/usage') as response:
+            async with client.stream('GET', path) as response:
                 response.raise_for_status()
                 if response.status_code != 200 or response.headers.get('content-encoding', 'identity') != 'identity':
                     raise ValueError('Invalid free usage response')
@@ -88,11 +93,29 @@ def paid_usage(snapshot):
 
 
 async def read(connection, plan, *, transport=None):
+    policy = None
+    if plan == 'account':
+        raw = await fetch(connection, transport, '/v1/credits/allowance')
+        if not isinstance(raw, dict) or raw.get('tenant_id') != connection.tenant_id:
+            raise ValueError('Credit tenant mismatch')
+        policy = raw.get('policy')
+        if policy == 'none' and raw.get('usage') is None:
+            plan, policy = 'paid', None
+        elif policy == 'google_weekly':
+            usage = project(raw.get('usage'), policy)
+            if usage is None:
+                raise ValueError('Account credits are unknown')
+            return dict(plan='free', policy=policy, usage=usage)
+        else:
+            raise ValueError('Invalid account credit policy')
     if plan == 'free':
         raw = await fetch(connection, transport)
         if not isinstance(raw, dict) or raw.get('tenant_id') != connection.tenant_id or raw.get('plan') != 'free':
             raise ValueError('Credit tenant mismatch')
-        usage = project(raw.get('usage'))
+        policy = raw.get('policy')
+        if policy not in (None, 'anonymous_trial', 'google_weekly'):
+            raise ValueError('Unknown free credit policy')
+        usage = project(raw.get('usage'), policy)
         if usage is None:
             raise ValueError('Free credits are unknown')
     elif plan == 'paid':
@@ -103,13 +126,16 @@ async def read(connection, plan, *, transport=None):
             await client.aclose()
     else:
         raise ValueError('Unknown credit plan')
-    return dict(plan=plan, usage=usage)
+    return dict(plan=plan, usage=usage, **({'policy': policy} if policy else {}))
 
 
 def project_summary(value):
     if not isinstance(value, dict) or value.get('plan') not in ('free', 'paid'):
         raise ValueError('Unknown credit plan')
-    usage = (project if value['plan'] == 'free' else project_paid)(value.get('usage'))
+    policy = value.get('policy')
+    if policy not in (None, 'anonymous_trial', 'google_weekly') or (policy and value['plan'] != 'free'):
+        raise ValueError('Unknown credit policy')
+    usage = project(value.get('usage'), policy) if value['plan'] == 'free' else project_paid(value.get('usage'))
     if usage is None:
         raise ValueError('Credits are unknown')
-    return dict(plan=value['plan'], usage=usage)
+    return dict(plan=value['plan'], usage=usage, **({'policy': policy} if policy else {}))

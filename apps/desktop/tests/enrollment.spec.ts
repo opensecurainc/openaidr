@@ -23,9 +23,13 @@ type Mock = {
   localRuntimeError?: string;
   setupChoices?: boolean;
   freeError?: string;
+  googleStatus?: 'pending'|'approved'|'expired';
+  googleError?: string;
+  googleConnectError?: string;
   freeUsage?: Record<string, unknown>;
   freeUsageError?: string;
   creditPlan?: 'free'|'paid';
+  creditPolicy?: 'anonymous_trial'|'google_weekly';
   creditIdentity?: {sensor_id:string;server_url:string};
   apiKeyError?: string;
   guardrails?: Record<string, unknown>;
@@ -172,6 +176,17 @@ async function boot(page: Page, mock: Mock) {
         if (win.mock.dashboardHandoff) await (window as unknown as {openNativeDashboard:(url:string) => Promise<void>}).openNativeDashboard(win.mock.dashboardHandoff);
         return null;
       }
+      if (action === 'google.start' || action === 'google.poll') {
+        if (win.mock.googleError) throw new Error(win.mock.googleError);
+        return {status:win.mock.googleStatus || 'pending',expires_at:'2099-01-01T00:00:00Z'};
+      }
+      if (action === 'google.connect') {
+        if (win.mock.googleConnectError) throw new Error(win.mock.googleConnectError);
+        win.mock.status = {...win.mock.status,connection_mode:'api_key',google_account:{email:'user@example.com'}};
+        win.mock.creditPlan = 'free'; win.mock.creditPolicy = 'google_weekly';
+        win.mock.freeUsage = {status:'active',allowance:'200',used:'0',reserved:'0',available:'200',starts_at:'2026-11-02T00:00:00Z',resets_at:'2026-11-09T00:00:00Z',checked_at:new Date().toISOString()};
+        return {enrolled:true,sensor_id:win.mock.status.sensor_id,connection_mode:'api_key'};
+      }
       if (action === 'desktop.update.status') {
         const update = structuredClone(win.mock.updateStatus === undefined ? win.mock.status.desktop_update ?? null : win.mock.updateStatus);
         if (win.mock.pendingUpdateStatus) await new Promise<void>(resolve => { win.completeUpdateStatus = resolve; });
@@ -193,7 +208,7 @@ async function boot(page: Page, mock: Mock) {
       const usageError = win.mock.usageErrorsByDays?.[args.request.days ?? 30] ?? win.mock.usageError;
       const guardrails = {...structuredClone(win.mock.guardrails ?? {supported:false}),days:args.request.days,sensor_id:win.mock.status.sensor_id,server_url:win.mock.status.server_url};
       const posture = {sensor_id:win.mock.status.sensor_id,server_url:win.mock.status.server_url,scope:'a'.repeat(64),...structuredClone(win.mock.posture ?? {supported:false,reason:'server_unavailable'})};
-      const creditSnapshot = {sensor_id:win.mock.status.sensor_id,server_url:win.mock.status.server_url,...win.mock.creditIdentity,plan:win.mock.creditPlan ?? (win.mock.status.connection_mode === 'free' ? 'free' : 'paid'),usage:structuredClone(win.mock.freeUsage ?? null)};
+      const creditSnapshot = {sensor_id:win.mock.status.sensor_id,server_url:win.mock.status.server_url,...win.mock.creditIdentity,plan:win.mock.creditPlan ?? (win.mock.status.connection_mode === 'free' ? 'free' : 'paid'),policy:win.mock.creditPolicy,usage:structuredClone(win.mock.freeUsage ?? null)};
       if (win.mock.pendingAction === action || (action === 'usage.summary' && win.mock.pendingUsageDays === args.request.days)) await new Promise<void>(resolve => { win.completeRequest = resolve; });
       if (action === 'credits.summary') {
         if (win.mock.freeUsageError) throw new Error(win.mock.freeUsageError);
@@ -8248,4 +8263,84 @@ for (const connection_mode of ['free','api_key','organization']) test(`enterpris
   await expect(page.locator('#enrollment-link')).toBeVisible();
   const requests = await page.evaluate(() => (window as unknown as {requests:Requests}).requests);
   expect(requests.some(request => request.action === 'setup')).toBe(false);
+});
+
+for (const maxWindowHeight of [720, 320]) {
+  test(`Starter and Google allowances stay distinct in a ${maxWindowHeight}px work area`, async ({page}) => {
+    const now = new Date('2026-11-04T08:00:00Z');
+    await page.clock.setFixedTime(now);
+    const usage = {status:'active',allowance:'200',used:'43.21',reserved:'0',available:'156.79',starts_at:'2026-11-02T00:00:00Z',resets_at:null,checked_at:now.toISOString()};
+    const status = {...converged,connection_mode:'free',server_url:'https://api.opensecura.ai'};
+    await boot(page,{status,freeUsage:usage,creditPolicy:'anonymous_trial',maxWindowHeight});
+    await openSensorStatus(page, false);
+    await expect(page.locator('#credit-title')).toHaveText('Starter credits');
+    await expect(page.locator('#free-plan-reset')).toHaveText('One-time starter credits. These do not renew.');
+    await expect(page.locator('#free-plan')).not.toContainText('Resets in');
+    await page.locator('#free-plan-toggle').click();
+    await expect(page.locator('#free-plan-reset-at')).toBeHidden();
+    await page.evaluate(({usage}) => {
+      const mock = (window as unknown as {mock:Mock}).mock;
+      mock.status = {...mock.status,connection_mode:'api_key',google_account:{email:'user@example.com'}};
+      mock.creditPlan = 'free'; mock.creditPolicy = 'google_weekly';
+      mock.freeUsage = {...usage,resets_at:'2026-11-09T00:00:00Z'};
+    }, {usage});
+    await returnToWindow(page);
+    await expect(page.locator('#credit-title')).toHaveText('200 free credits each week');
+    await expect(page.locator('#credit-owner')).toHaveText('user@example.com');
+    await expect(page.locator('#free-plan-reset')).toHaveText('Resets in 4 days, 16 hours');
+    await expect(page.locator('#free-plan')).not.toContainText('Personal · Paid');
+    expect(await page.locator('#health-card').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.locator('#free-plan-toggle').click();
+    await page.locator('#free-plan-refresh').scrollIntoViewIfNeeded();
+    await expect(page.locator('#free-plan-refresh')).toBeInViewport({ratio:1});
+  });
+}
+
+for (const maxWindowHeight of [720, 320]) {
+  test(`Google sign-in can pause, resume and connect in a ${maxWindowHeight}px work area`, async ({page}, testInfo) => {
+    await page.clock.install({time:new Date('2026-11-04T08:00:00Z')});
+    const status = {...converged,connection_mode:'free',server_url:'https://api.opensecura.ai',heartbeat:{last_success_at:'2026-11-04T08:00:00Z',error:''}};
+    const usage = {status:'exhausted',allowance:'200',used:'200',reserved:'0',available:'0',starts_at:'2026-11-02T00:00:00Z',resets_at:null,checked_at:'2026-11-04T08:00:00Z'};
+    await boot(page,{status,freeUsage:usage,creditPolicy:'anonymous_trial',maxWindowHeight});
+    await openSensorStatus(page, false);
+    await page.locator('#google-signin').scrollIntoViewIfNeeded();
+    await expect(page.locator('#google-signin')).toBeInViewport({ratio:1});
+    expect(await page.locator('#health-card').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.locator('#google-signin').click();
+    await expect(page.locator('#google-message')).toContainText('confirm this device');
+    await expect(page.locator('#google-signin')).toBeDisabled();
+    await page.locator('#google-cancel').click();
+    await page.clock.fastForward(6000);
+    expect((await requests(page)).filter(row => row.action === 'google.connect')).toHaveLength(0);
+    await page.evaluate(() => { (window as unknown as {mock:Mock}).mock.googleStatus = 'approved'; });
+    await page.locator('#google-signin').click();
+    await expect(page.locator('#google-signin')).toBeHidden();
+    await expect(page.locator('#credit-title')).toHaveText('200 free credits each week');
+    await expect(page.locator('#credit-owner')).toHaveText('user@example.com');
+    await openSensorStatus(page, false);
+    await page.locator('#google-console').scrollIntoViewIfNeeded();
+    await expect(page.locator('#google-console')).toBeInViewport({ratio:1});
+    await page.locator('#google-console').click();
+    expect((await requests(page)).filter(row => row.action === 'desktop.dashboard').at(-1)?.server_url).toBe('https://console.opensecura.ai/');
+    expect((await requests(page)).filter(row => row.action === 'google.connect')).toHaveLength(1);
+    await page.screenshot({path:testInfo.outputPath(`google-account-${maxWindowHeight}.png`),animations:'disabled'});
+  });
+}
+
+test('Google sign-in errors and expiry preserve the current free connection', async ({page}) => {
+  const status = {...converged,connection_mode:'free',server_url:'https://api.opensecura.ai'};
+  await boot(page,{status,googleError:'Could not open your browser. Retry Google sign-in.'});
+  await openSensorStatus(page, false);
+  await page.locator('#google-signin').click();
+  await expect(page.locator('#google-message')).toContainText('Could not open your browser');
+  await page.evaluate(() => { const mock = (window as unknown as {mock:Mock}).mock; mock.googleError = undefined; mock.googleStatus = 'expired'; });
+  await page.locator('#google-signin').click();
+  await expect(page.locator('#google-message')).toHaveText('Sign-in expired. Start again from this app.');
+  await expect(page.locator('#google-signin')).toBeEnabled();
+  expect((await requests(page)).filter(row => row.action === 'google.connect')).toHaveLength(0);
+  await page.evaluate(() => { const mock = (window as unknown as {mock:Mock}).mock; mock.googleStatus = 'approved'; mock.googleConnectError = 'Sensor could not stop.'; });
+  await page.locator('#google-signin').click();
+  await openSensorStatus(page, false);
+  await expect(page.locator('#google-message')).toContainText('Could not connect your Google account');
+  await expect(page.locator('#google-signin')).toBeEnabled();
 });
