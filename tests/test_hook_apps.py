@@ -400,6 +400,20 @@ def test_workbuddy_profiles_settings_and_native_disablement(tmp_path, monkeypatc
         path.write_text(json.dumps(original))
         hooks.install(path, sensor_executable, "workbuddy")
         assert hooks.installed(path, "workbuddy")
+        # An explicit PowerShell shell makes WorkBuddy start only PowerShell 7,
+        # which rejected every action on stock Windows. Setup leaves the shell
+        # to WorkBuddy and repairs handlers written with it.
+        ours = lambda: [handler for event in hooks.load_settings(path)["hooks"].values() for entry in event
+                        for handler in entry["hooks"] if hooks.our_handler(handler)]
+        assert ours() and not any("shell" in handler for handler in ours())
+        legacy = hooks.load_settings(path)
+        for handler in (h for event in legacy["hooks"].values() for entry in event for h in entry["hooks"]):
+            if hooks.our_handler(handler):
+                handler["shell"] = "powershell"
+        path.write_text(json.dumps(legacy))
+        assert not hooks.installed(path, "workbuddy")
+        hooks.install(path, sensor_executable, "workbuddy")
+        assert hooks.installed(path, "workbuddy") and not any("shell" in handler for handler in ours())
         for key in ("disableAllHooks", "allowManagedHooksOnly"):
             installed = hooks.load_settings(path)
             path.write_text(json.dumps({**installed, key: True}))
@@ -410,6 +424,66 @@ def test_workbuddy_profiles_settings_and_native_disablement(tmp_path, monkeypatc
         hooks.uninstall(path, "workbuddy")
         assert hooks.load_settings(path) == original
         assert not hook_runtime.directory(path).exists()
+
+
+def test_workbuddy_hooks_fail_open_without_a_startable_windows_shell(tmp_path, monkeypatch, sensor_executable):
+    # WorkBuddy rejects every action whose hook shell cannot start, so setup
+    # must only leave OpenAIDR hooks where WorkBuddy's own shell choice starts.
+    from openaidr.sensor import workbuddy
+    from test_hooks_setup import sensor_config
+
+    tools, system = tmp_path / "tools", tmp_path / "Windows"
+    tools.mkdir()
+    monkeypatch.setattr(workbuddy, "WINDOWS", True)
+    monkeypatch.setenv("PATH", str(tools))
+    monkeypatch.setenv("SYSTEMROOT", str(system))
+    monkeypatch.setattr(hooks, "detect_apps", lambda config=None: {agent: agent == "workbuddy" for agent in hooks.APP_EVENTS})
+
+    def shell(path, code):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"#!/bin/sh\nexit {code}\n")
+        path.chmod(0o755)
+
+    def unavailable():
+        monkeypatch.setattr(workbuddy, "_shell_cache", None)
+        return workbuddy.hook_shell_unavailable()
+
+    config = sensor_config(tmp_path)
+    path = hooks.settings_path("workbuddy", config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "personal-check"}]}]}}
+    path.write_text(json.dumps(original))
+
+    # No Git Bash and no PowerShell: automatic setup adds nothing, an explicit
+    # request explains why, and status keeps setup from retrying.
+    assert unavailable()
+    hooks.install(path, sensor_executable, "workbuddy", config_path=config.path)
+    assert hooks.load_settings(path) == original
+    with pytest.raises(ValueError, match="cannot start Git Bash or PowerShell"):
+        hooks.install(path, sensor_executable, "workbuddy", config_path=config.path, explicit=True)
+    state = hooks.status(config=config)["workbuddy"]
+    assert state["shell_unavailable"] and not state["available"] and not state["installed"]
+
+    # Windows PowerShell on PATH (or in System32) is used when Git Bash is absent.
+    shell(tools / "powershell", 0)
+    assert not unavailable()
+    hooks.install(path, sensor_executable, "workbuddy", config_path=config.path)
+    assert hooks.installed(path, "workbuddy")
+    assert hooks.status(config=config)["workbuddy"]["available"]
+    assert not hooks.remove_unstartable_workbuddy(path, config.path)
+
+    # WorkBuddy uses Git Bash first and does not fall back when it cannot
+    # start, for example under application control. Remove only our hooks.
+    shell(tmp_path / "Git" / "cmd" / "git", 0)
+    shell(tmp_path / "Git" / "bin" / "bash.exe", 1)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(tools), str(tmp_path / "Git" / "cmd")]))
+    assert unavailable()
+    assert hooks.remove_unstartable_workbuddy(path, config.path)
+    assert hooks.load_settings(path) == original and not hooks.opted_out(config, "workbuddy")
+    shell(tmp_path / "Git" / "bin" / "bash.exe", 0)
+    assert not unavailable()
+    hooks.install(path, sensor_executable, "workbuddy", config_path=config.path)
+    assert hooks.installed(path, "workbuddy")
 
 
 def test_copilot_timeout_override_and_disable_all_hooks(tmp_path, sensor_executable):

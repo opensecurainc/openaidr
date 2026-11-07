@@ -16,6 +16,7 @@ import errno
 import hashlib
 import hmac
 import json
+import logging
 import ntpath
 import os
 import re
@@ -51,7 +52,7 @@ from .settings_files import content_hash, edit_settings, publication_state
 from openaidr.core.toolmap import map_tool
 from .collectors import content_text
 from .local_http import BoundedThreadingMixIn, HookAdmissionMixIn, LoopbackHTTPServer, loopback_host
-from . import hook_runtime
+from . import hook_runtime, workbuddy
 
 AGENTS = tuple(PRODUCTS)
 
@@ -322,6 +323,11 @@ def available(entry, event, agent):
             continue
         if agent == "claude" and handler.get("if"):
             continue
+        # WorkBuddy starts only PowerShell 7 for an explicit PowerShell hook
+        # shell, so that handler cannot start on stock Windows. Its default
+        # shell falls back to Git Bash or Windows PowerShell; repair to it.
+        if agent == "workbuddy" and handler.get("shell") == "powershell":
+            continue
         # Decisions and final Codex observations must finish before agent exit.
         synchronous = event in DECISION_EVENTS or (
             agent == "codex" and event in CODEX_EVENTS and not CODEX_EVENTS[event][1]
@@ -450,6 +456,26 @@ def place(existing, group):
     return result, moves
 
 
+WORKBUDDY_NO_SHELL = ("WorkBuddy cannot start Git Bash or PowerShell on this device, so OpenAIDR guardrails "
+                      "are off for WorkBuddy and its actions are not blocked. Install Git for Windows or allow "
+                      "PowerShell, then turn WorkBuddy guardrails on again.")
+
+
+def remove_unstartable_workbuddy(path, config_path=None):
+    """Fail open on Windows when WorkBuddy cannot start a hook shell.
+
+    WorkBuddy rejects every action whose hook shell fails to start, even in
+    Shadow mode. Remove only OpenAIDR handlers and record no opt-out, so
+    setup installs them again once a shell starts. Returns True if removed.
+    """
+    # Probe a shell only while our WorkBuddy hooks exist on Windows.
+    if not workbuddy.WINDOWS or not present(path, "workbuddy") or not workbuddy.hook_shell_unavailable():
+        return False
+    uninstall(path, "workbuddy", config_path=config_path)
+    logging.warning("WorkBuddy cannot start a hook shell; removed OpenAIDR WorkBuddy hooks so actions are not blocked")
+    return True
+
+
 def install(path, executable="openaidr", agent="claude", config_path=None, *, explicit=False,
             config_toml=None):
     """Install or repair our hooks. ``explicit`` is a person asking for them
@@ -461,6 +487,11 @@ def install(path, executable="openaidr", agent="claude", config_path=None, *, ex
         from . import hook_opencode
 
         return hook_opencode.install(path, executable, config_path)
+    if agent == "workbuddy" and workbuddy.hook_shell_unavailable():
+        remove_unstartable_workbuddy(path, config_path)
+        if explicit:
+            raise ValueError(WORKBUDDY_NO_SHELL)
+        return
     path = Path(path)
     hook_runtime.register(config_path, hook_runtime.directory(path))
 
@@ -485,7 +516,6 @@ def install(path, executable="openaidr", agent="claude", config_path=None, *, ex
                             "timeout": hook_timeout(event, agent),
                             **({"failClosed": False} if agent == "cursor" else {}),
                             **({"fail_closed": False} if agent == "hermes" else {}),
-                            **({"shell": "powershell"} if agent == "workbuddy" and os.name == "nt" else {}),
                         }
                     ]
                 },
@@ -1127,6 +1157,10 @@ def status(paths=None, config=None):
         }
         if agent in APP_EVENTS:
             result[agent]["available"] = detected[agent]
+            # Without a startable shell, setup must not add WorkBuddy hooks
+            # (they would block every action), so the app is not set up.
+            if agent == "workbuddy" and detected[agent] and workbuddy.hook_shell_unavailable():
+                result[agent].update(available=False, shell_unavailable=True)
             result[agent]["control_events"] = [event for event in managed_events(agent) if controls(PRODUCTS[agent], event)]
         if agent == "hermes":
             result[agent]["approval_pending"] = present(paths[agent], agent) and not hermes_approved(paths[agent])
