@@ -401,7 +401,7 @@ test.describe('Windows installed application', () => {
       expect(desktopBuild).toEqual(expectedBuild);
       restoreWebviewPolicy = configureWebviewPolicy(path.join(temporary, 'webview2'));
       await launchApp();
-      await screenshot(info, 'OpenAIDR', 'app-before-enrollment', 'Continue for free');
+      await screenshot(info, 'OpenAIDR', 'app-before-enrollment', build.desktop_edition === 'enterprise' ? 'Connect your organization' : 'Continue for free');
       await attach(info, 'Build and environment', {build,
         Windows: powershell('[System.Environment]::OSVersion.VersionString'),
         dashboard_branding: 'Neutral E2E palette; private marks omitted',

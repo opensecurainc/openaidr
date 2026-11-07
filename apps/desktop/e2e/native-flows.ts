@@ -25,6 +25,7 @@ export async function exerciseAppControls({native, screenshot, sensorId, sensorS
         && !document.querySelector('#usage-message').textContent.includes('Loading');`, [days]);
       await screenshot(`app-usage-${days}-days`);
     }
+    await native.click('button[aria-label="Cost estimate information"]');
   });
   await test.step('Guardrail activity and agent configuration use real sensor state', async () => {
     await native.click('#guardrails-tab');
@@ -43,25 +44,33 @@ export async function exerciseAppControls({native, screenshot, sensorId, sensorS
     await screenshot('app-guardrails-activity');
     await native.click('#guardrails-view');
     await native.visible('#guardrails-activity', false);
-    for (const agent of ['codex', 'claude', 'hermes', 'copilot', 'cursor', 'antigravity', 'opencode']) {
+    for (const agent of ['codex', 'claude', 'hermes', 'copilot', 'cursor', 'antigravity', 'opencode', 'workbuddy']) {
       await native.click(`#guardrails-page [data-agent="${agent}"]`);
       await native.wait(`return document.querySelector('#guardrails-page [data-agent="' + arguments[0] + '"]').getAttribute('aria-pressed') === 'true'
         && Boolean(document.querySelector('#agent-path').textContent);`, [agent]);
     }
     await native.click('#guardrails-page [data-agent="codex"]');
-    await native.text('#agent-path', (await sensorStatus()).hooks.codex.config_path);
+    const configPath = (await sensorStatus()).hooks.codex.config_path;
+    const codexState = async () => {
+      const codex = (await sensorStatus()).hooks.codex;
+      const state = codex.profiles?.length
+        ? codex.profiles.find((profile: {config_path:string}) => profile.config_path === configPath) : codex;
+      expect(state, 'The selected Codex profile remains in sensor status').toBeDefined();
+      return state;
+    };
+    await native.text('#agent-path', configPath);
     await native.click('#agent-configuration');
     await native.text('#agent-feedback', 'Opened the configuration folder.');
     for (const enabled of [false, true]) {
       await native.click('#agent-enabled');
       await native.wait('const input = document.querySelector("#agent-enabled"); return !input.disabled && input.checked === arguments[0];', [enabled]);
-      const state = (await sensorStatus()).hooks.codex;
+      const state = await codexState();
       expect(state.installed).toBe(enabled);
       expect(Boolean(state.opted_out)).toBe(!enabled);
     }
     await native.click('#agent-reinstall');
     await native.text('#agent-feedback', 'Saved.');
-    expect((await sensorStatus()).hooks.codex.current).toBe(true);
+    expect((await codexState()).current).toBe(true);
     await native.click('#usage-tab');
     await native.visible('#usage-content');
     await native.wait(`return document.querySelector('#usage-panel [data-days="30"]').getAttribute('aria-pressed') === 'true';`);

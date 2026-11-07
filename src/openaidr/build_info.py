@@ -47,6 +47,8 @@ def validate(info):
             raise ValueError("publication timestamp does not match publication time")
     elif info.get("publication_timestamp") is not None:
         raise ValueError("publication timestamp requires a publication time")
+    if info.get("desktop_edition", "standard") not in ("standard", "enterprise"):
+        raise ValueError("desktop edition must be standard or enterprise")
     return info
 
 
@@ -102,6 +104,8 @@ def resolve(root, *, clean=True, environ=None):
         "source_timestamp": stamp,
         "built_at": env.get("OPENAIDR_BUILD_DATE") or datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+    if env.get("OPENAIDR_DESKTOP_EDITION"):
+        info["desktop_edition"] = env["OPENAIDR_DESKTOP_EDITION"]
     if env.get("OPENAIDR_RELEASE_DATE"):
         info["published_at"] = env["OPENAIDR_RELEASE_DATE"]
         info["publication_timestamp"] = int(datetime.fromisoformat(info["published_at"].replace("Z", "+00:00")).timestamp())
@@ -118,6 +122,8 @@ def environment(info):
     }
     if info.get("published_at"):
         result["OPENAIDR_RELEASE_DATE"] = info["published_at"]
+    if info.get("desktop_edition"):
+        result["OPENAIDR_DESKTOP_EDITION"] = info["desktop_edition"]
     return result
 
 

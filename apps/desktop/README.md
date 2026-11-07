@@ -119,6 +119,32 @@ download locations.
 Use the macOS signing runbook to publish a signed release, locate
 signing credentials and recovery copies, or verify an installed app.
 
+### Enterprise distribution
+
+Build with `python scripts/build_desktop.py --edition enterprise` to require an
+organization enrollment link. This build omits free and personal API-key setup,
+the local runtime setup interface, and the bundled local runtime source archive.
+The bundled sensor also rejects those setup actions. Existing personal or
+desktop-managed local connections require organization enrollment before setup;
+their data is kept. Reinstall does not restart a retained local runtime.
+Explicit uninstall and data deletion retain their existing cleanup behavior.
+
+Use `--edition standard` for the existing full app. The build also accepts
+`OPENAIDR_DESKTOP_EDITION=enterprise`; an explicit `--edition` takes precedence.
+The edition is recorded in the app and sensor build metadata and cannot be
+changed by an environment variable after installation. The version format and
+bundle identity stay the same. Organization billing and service access remain
+server responsibilities; the edition is not a payment or license check.
+
+Use the same edition when compiling and bundling a Windows installer. Select
+the enterprise edition for every platform build published to the enterprise
+release channel, including later automatic updates. Do not publish different
+editions under the same version and target. The enterprise release channel
+rejects standard and edition-less builds, including retained publication retries.
+Roll back by restoring the previous enterprise implementation at a new source
+version and applying the normal release verification. Standard builds require
+separate distribution.
+
 The window is 580 logical pixels wide and fits its height to the content,
 bounded to 160–720 logical pixels and the monitor's available work area.
 Manual resizing is disabled. The page scrolls when content exceeds the available
@@ -824,7 +850,12 @@ Native app logs outside Application Support, agent backups outside that folder,
 and update recovery bundles beside the app require separate manual cleanup.
 
 The durable `desktop-removal.json` record prevents this version from reinstalling
-the sensor or registering updates on refresh, relaunch, or login. **Reinstall**
+the sensor or registering updates on refresh, relaunch, or login when data is
+retained or deletion is incomplete. After local data deletion completes and no
+sensor configuration remains, the next window launch clears the record and opens
+fresh setup without a **Reinstall** click. Background update workers never clear
+it, and the uninstalling window keeps the record through deletion and Trash retries.
+**Reinstall**
 starts immediately, resumes the saved enrollment, and restores the agent
 opt-out choices from before removal. Progress and retry errors appear in the main
 window. It does not consume another enrollment link.
@@ -1520,7 +1551,10 @@ pnpm --filter openaidr-desktop test:web
 ```
 
 Every desktop UI change must add or update focused coverage and pass the affected
-tests in both browsers. The `Desktop: Validate UI` workflow runs the full suite
+tests in both browsers. Specs import `test` and `expect` from `tests/fixtures.ts`
+instead of `@playwright/test`. That fixture gives browser page creation its own
+60-second budget, so a slow WebKit start under CI load does not consume the
+30-second test timeout. The `Desktop: Validate UI` workflow runs the full suite
 on relevant pull requests and uploads a private HTML report for passing and
 failing runs. Open the report link in the workflow summary, extract the ZIP, and
 open `index.html`. Select a test to see its final screenshot. Reports are retained

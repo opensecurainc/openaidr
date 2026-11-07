@@ -15,10 +15,10 @@ type Checks = {enabled:boolean; state:string;
 type Snapshot = {supported:true; schema_version:1; source?:'local'; sensor_id:string; server_url:string; scope:string; collected_at:string|null;
   assessments?:unknown;
   groups:Record<Group,Inventory>; coverage:{status:'complete'|'partial'|'unavailable'; sources:{source:string;status:'ok'|'partial'|'error'|'unavailable';collected_at:string|null;message:string}[]}};
-const groups:Record<Group,{label:string;noun:string;description:string}> = {
-  apps:{label:'AI Apps',noun:'apps',description:'Applications reported on this device'},
-  components:{label:'Supply Chain',noun:'components',description:'Packages, MCP servers, and agent extensions'},
-  skills:{label:'AI Skills',noun:'skills',description:'Instructions available to your agents'},
+const groups:Record<Group,{label:string;noun:string}> = {
+  apps:{label:'AI Apps',noun:'apps'},
+  components:{label:'Supply Chain',noun:'components'},
+  skills:{label:'AI Skills',noun:'skills'},
 };
 const approvals = {approved:'Approved',unapproved:'Unapproved',monitoring:'Monitoring',unavailable:'Review unavailable'};
 const assessments = {complete:'Complete',partial:'Partial',pending:'Pending',failed:'Failed',stale:'Stale',unsupported:'Not assessed',disabled:'Disabled'};
@@ -78,7 +78,7 @@ function badge(asset:Asset, group:Group, local = false) {
 
 export function initPosture(request:(action:string, params?:Record<string,unknown>) => Promise<unknown>, visible:() => boolean) {
   const panel = node('section'); panel.id = 'posture-page'; panel.hidden = true; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby','posture-tab');
-  panel.innerHTML = `<div class="posture-heading"><div><h1>Your AI posture</h1><p id="posture-description">Know what is installed and what needs review.</p></div><button type="button" class="button button-secondary" id="posture-refresh">Refresh</button></div>
+  panel.innerHTML = `<div class="posture-heading"><h1>AI posture</h1><button type="button" class="button button-secondary" id="posture-refresh">Refresh</button></div>
     <div class="posture-nav" role="tablist" aria-label="Posture pages"></div>
     <p id="posture-message" role="status"></p>
     <div id="posture-content" hidden>
@@ -90,13 +90,12 @@ export function initPosture(request:(action:string, params?:Record<string,unknow
           <details id="posture-credit-details"><summary>Credit details</summary><p id="posture-credit-info"></p><p>Posture totals cover retained checks for this connection on this device. Unconfirmed charges are excluded. Pausing stops new checks; admitted checks may finish.</p></details>
           <p id="posture-check-message" role="status"></p>
         </section>
-        <section class="card posture-card"><div class="posture-section-heading"><h2>Needs attention <span id="posture-attention-count" class="posture-count"></span></h2><span id="posture-attention-description">Reported findings and reviews</span></div><div id="posture-attention"></div></section>
-        <section class="card posture-card posture-coverage" aria-label="Collection coverage"><div><strong id="posture-coverage-title"></strong><p id="posture-collected"></p></div><span id="posture-coverage-state" class="posture-badge"></span></section>
+        <section class="card posture-card"><div class="posture-section-heading"><h2>Needs attention <span id="posture-attention-count" class="posture-count"></span></h2></div><div id="posture-attention"></div></section>
       </section>
       <section id="posture-inventory" role="tabpanel" hidden><div class="posture-filters"><input id="posture-search" type="search" aria-label="Search loaded assets" placeholder="Search loaded assets"><label><input type="checkbox" id="posture-only-attention">Needs attention</label></div>
         <section class="card posture-card"><div class="posture-list-heading"><span id="posture-column">Asset</span><span id="posture-review-column">Organization review</span></div><div id="posture-rows"></div><div class="posture-list-footer"><span id="posture-result" role="status"></span><div><button type="button" class="button button-secondary" id="posture-previous" aria-label="Previous asset page">‹</button><span id="posture-page-number"></span><button type="button" class="button button-secondary" id="posture-next" aria-label="Next asset page">›</button></div></div></section>
       </section>
-      <p class="posture-note" id="posture-note"></p><details id="posture-coverage-details"><summary>Collection details</summary><div id="posture-sources"></div></details>
+      <details id="posture-coverage-details" class="card posture-card posture-coverage"><summary aria-label="Collection details" aria-describedby="posture-coverage-title posture-loaded"><span class="posture-coverage-copy"><strong id="posture-coverage-title"></strong><span id="posture-loaded" hidden></span></span><span class="posture-coverage-toggle" aria-hidden="true">Details <span>›</span></span></summary><div class="posture-coverage-body"><p id="posture-collected"></p><p class="posture-note" id="posture-note"></p><div id="posture-sources"></div></div></details>
     </div>`;
   document.getElementById('health-card')!.before(panel);
   const dialog = node('dialog','','simulation-dialog posture-dialog'); dialog.id = 'posture-detail'; dialog.setAttribute('aria-labelledby','posture-detail-title');
@@ -134,9 +133,11 @@ export function initPosture(request:(action:string, params?:Record<string,unknow
     selected = key; page = 0; search.value = ''; attention.checked = false;
     tabs.forEach((tab,i) => { tab.setAttribute('aria-selected',String(pages[i] === key)); tab.tabIndex = pages[i] === key ? 0 : -1; });
     el('overview').hidden = key !== 'overview'; el('inventory').hidden = key === 'overview';
-    panel.querySelector('h1')!.textContent = key === 'overview' ? 'Your AI posture' : groups[key].label;
-    el('description').textContent = key === 'overview' ? 'Know what is installed and what needs review.' : groups[key].description;
-    if (key !== 'overview') el('inventory').setAttribute('aria-labelledby',`posture-${key}-tab`);
+    panel.querySelector('h1')!.textContent = key === 'overview' ? 'AI posture' : groups[key].label;
+    if (key !== 'overview') {
+      el('inventory').setAttribute('aria-labelledby',`posture-${key}-tab`);
+      search.placeholder = `Search ${groups[key].noun}`;
+    }
     render();
   }
   function filtered() {
@@ -148,8 +149,8 @@ export function initPosture(request:(action:string, params?:Record<string,unknow
     const control = node('button','','posture-row'); control.type = 'button'; control.dataset.asset = asset.id;
     const copy = node('span','','posture-row-copy'); copy.append(node('strong',asset.name));
     const local = snapshot?.source === 'local';
-    const detail = overview ? asset.findings[0]?.title || (!local && asset.approval_status === 'unapproved' ? 'Awaiting organization review' : 'Review reported status') : [asset.kind,asset.version,asset.publisher || asset.source].filter(Boolean).join(' · ');
-    copy.append(node('small',detail));
+    const detail = overview ? asset.findings[0]?.title || (!local && asset.approval_status === 'unapproved' ? 'Awaiting review' : '') : [group === 'components' ? asset.kind : null,asset.version,asset.publisher || asset.source].filter(Boolean).join(' · ');
+    if (detail) copy.append(node('small',detail));
     const chevron = node('span','›','posture-chevron'); chevron.setAttribute('aria-hidden','true');
     control.append(assetIcon(asset,group),copy,badge(asset,group,local),chevron);
     control.addEventListener('click',() => detailView(asset,group,control)); return control;
@@ -157,8 +158,6 @@ export function initPosture(request:(action:string, params?:Record<string,unknow
   function render() {
     if (!snapshot) { controls(); return; }
     const local = snapshot.source === 'local';
-    el('description').textContent = selected === 'overview' ? 'Know what is installed and what needs review.' : local && selected === 'apps' ? 'Known AI apps found on this device' : groups[selected].description;
-    el('attention-description').textContent = local ? 'Findings and collection gaps' : 'Reported findings and reviews';
     el('content').hidden = false;
     el('checks').hidden = !local;
     if (local) {
@@ -183,12 +182,8 @@ export function initPosture(request:(action:string, params?:Record<string,unknow
       const issues = groupKeys.flatMap(group => snapshot!.groups[group].items.filter(asset => asset.attention).map(asset => ({asset,group})));
       el('attention-count').textContent = `${issues.length}${groupKeys.some(group => snapshot!.groups[group].truncated) ? ' loaded' : ''}`;
       el('attention').replaceChildren(...issues.slice(0,3).map(({asset,group}) => row(asset,group,true)));
-      if (!issues.length) el('attention').append(node('p','No attention items reported in the loaded records.','posture-empty'));
-      if (issues.length > 3) el('attention').append(node('p',`Showing 3 of ${issues.length} loaded attention items. Open a category to review more.`,'posture-note'));
-      const coverage = snapshot.coverage;
-      el('coverage-title').textContent = coverage.status === 'complete' ? 'Collection complete' : coverage.status === 'partial' ? 'Collection is incomplete' : 'Collection unavailable';
-      el('collected').textContent = `Oldest source update: ${stamp(snapshot.collected_at)}`;
-      el('coverage-state').textContent = coverage.status === 'complete' ? 'Reported' : 'Check sources';
+      if (!issues.length) el('attention').append(node('p','No attention items in loaded records.','posture-empty'));
+      if (issues.length > 3) el('attention').append(node('p','Open a category for more.','posture-note'));
     } else {
       const inventory = snapshot.groups[selected], rows = filtered(), pages = Math.max(1,Math.ceil(rows.length/6));
       page = Math.min(page,pages-1);
@@ -196,10 +191,15 @@ export function initPosture(request:(action:string, params?:Record<string,unknow
       el('review-column').textContent = local || selected === 'components' ? 'Assessment' : 'Organization review';
       el('rows').replaceChildren(...rows.slice(page*6,page*6+6).map(asset => row(asset,selected as Group)));
       if (!rows.length) el('rows').append(node('p',inventory.items.length ? 'No matching assets. Clear the search or attention filter.' : 'No assets have been reported in this category.','posture-empty'));
-      el('result').textContent = rows.length ? `${page*6+1}–${Math.min(page*6+6,rows.length)} of ${rows.length} loaded ${groups[selected].noun}` : `0 loaded ${groups[selected].noun}`;
+      el('result').textContent = `${rows.length ? `${page*6+1}–${Math.min(page*6+6,rows.length)} of ${rows.length}` : '0'}${inventory.truncated ? ' loaded' : ''} ${groups[selected].noun}`;
       el('page-number').textContent = `${page+1} / ${pages}`;
     }
     const incomplete = groupKeys.filter(group => snapshot!.groups[group].truncated).map(group => `${groups[group].label}: ${snapshot!.groups[group].items.length} of ${snapshot!.groups[group].total} loaded`);
+    const coverage = snapshot.coverage;
+    el('coverage-title').textContent = coverage.status === 'complete' ? 'Collection complete' : coverage.status === 'partial' ? 'Collection incomplete' : 'Collection unavailable';
+    el('loaded').textContent = incomplete.join(' · ');
+    el('loaded').hidden = !incomplete.length;
+    el('collected').textContent = `Oldest source update: ${stamp(snapshot.collected_at)}`;
     el('note').textContent = [incomplete.length ? `${incomplete.join('; ')}. Search and attention counts cover loaded records only.` : '',local ? 'Inventory is collected on this device. When enabled, automatic checks send selected data for assessment. Collection alone does not assess security.' : selected === 'components' ? 'Assessment status is separate from organization approval.' : 'Organization approval is separate from security assessment.'].filter(Boolean).join(' ');
     el('sources').replaceChildren(...snapshot.coverage.sources.map(source => {
       const line = node('p'); line.append(node('strong',`${source.source}: ${source.status}`),node('span',` · ${stamp(source.collected_at)}${source.message ? ' · '+source.message : ''}`)); return line;

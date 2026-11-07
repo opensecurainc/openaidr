@@ -53,8 +53,11 @@ def test_invalid_links_never_echo_the_secret(link):
     assert CODE not in str(error.value)
 
 
+@pytest.mark.parametrize("edition", ["standard", "enterprise"])
 @pytest.mark.parametrize("existing", [False, True])
-def test_bridge_previews_without_writes_then_enrolls_and_applies_config(tmp_path, monkeypatch, existing):
+def test_bridge_previews_without_writes_then_enrolls_and_applies_config(tmp_path, monkeypatch, existing, edition):
+    info = {**bridge.build_info.current(), "desktop_edition": edition}
+    monkeypatch.setattr(bridge.build_info, "current", lambda: info)
     received = []
     mode = {"auth_mode": "bearer", "tenant_id": TENANT, "response_tenant": TENANT}
 

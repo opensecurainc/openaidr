@@ -140,6 +140,8 @@ def test_git_free_builds_use_committer_date_in_los_angeles(tmp_path, instant, ex
 @pytest.mark.parametrize("prefix_length", [7, 10])
 def test_wheel_and_sdist_preserve_identity_without_git_or_runtime_environment(source, tmp_path, prefix_length):
     info = resolve(source, environ={})
+    if prefix_length == 10:
+        info["desktop_edition"] = "enterprise"
     info["version"] = info["version"].split("+")[0] + "+" + info["source_commit"][:prefix_length]
     env = {**os.environ, **environment(info)}
     result = subprocess.run([sys.executable, "-m", "build", "--no-isolation"], cwd=source, env=env, text=True, capture_output=True)

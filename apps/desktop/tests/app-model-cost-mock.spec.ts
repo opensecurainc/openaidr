@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import config from '../src-tauri/tauri.conf.json' with {type:'json'};
 
 test.use({deviceScaleFactor:2});
