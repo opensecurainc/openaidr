@@ -42,10 +42,14 @@ try {
     if ($app.HasExited) { throw "App exited before setup appeared: $($app.ExitCode)" }
     if ($app.MainWindowHandle -ne [IntPtr]::Zero) {
       $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
-      $condition = [System.Windows.Automation.PropertyCondition]::new(
-        [System.Windows.Automation.AutomationElement]::NameProperty, 'Continue for free')
-      $control = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
-      if ($null -ne $control) { $found = $true; break }
+      $found = $true
+      foreach ($name in @('Sign in with Google', 'Continue without signing in')) {
+        $condition = [System.Windows.Automation.PropertyCondition]::new(
+          [System.Windows.Automation.AutomationElement]::NameProperty, $name)
+        $control = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+        if ($null -eq $control) { $found = $false; break }
+      }
+      if ($found) { break }
     }
     Start-Sleep -Seconds 1
   }

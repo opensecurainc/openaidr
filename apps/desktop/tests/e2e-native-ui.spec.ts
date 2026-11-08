@@ -46,7 +46,7 @@ for (const transport of ['WebDriver', 'adapter']) {
 test('native adapter reports missing controls separately from declared coverage and redacts failures', async ({page}, info) => {
   await page.setContent(`<main id="app"><input id="value"><button id="used">Use</button>
     <button id="new-control">New control</button><button id="retry" hidden>Retry</button>
-    <button id="remove-app" hidden>Uninstall</button>
+    <button id="remove-app" hidden>Uninstall</button><button id="setup-google-signin">Sign in with Google</button>
     <section id="usage-panel" role="tabpanel"><button data-days="1">24 hours</button></section>
     <section id="guardrails-page" role="tabpanel"><button data-days="1">24 hours</button>
       <button data-agent="codex">Codex: installed</button></section></main>`);
@@ -76,6 +76,7 @@ test('native adapter reports missing controls separately from declared coverage 
     {button: '#guardrails-page [data-days="1"]', coverage: 'native click'},
     {button: '[data-agent="codex"]', coverage: 'native click'},
     {button: '#retry', coverage: 'browser only', reason: expect.stringContaining('enrollment.spec.ts')},
+    {button: '#setup-google-signin', coverage: 'browser only', reason: expect.stringContaining('test_google_connection.py')},
     {button: '#remove-app', coverage: 'not supported', reason: 'This platform uses its package manager for removal.'},
   ]));
   await expect(native.fill('#value', privateValue)).rejects.toThrow('[REDACTED]');

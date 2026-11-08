@@ -13,6 +13,7 @@ const buttonKey = `(button) => button.id ? '#' + button.id
 // disposable organization does not seed. Enterprise publication runs these cases.
 const browserOnly: Record<string, string> = {
   '#continue-free': 'Hosted free enrollment uses a separate identity from this organization E2E: enrollment.spec.ts and test_sensor_free_enrollment.py',
+  '#setup-google-signin': 'Google account pairing uses a separate identity from this organization E2E: enrollment.spec.ts and test_google_connection.py',
   '#retry': 'Recovery after a status/setup failure: enrollment.spec.ts',
   '#update-primary': 'Signed-update availability and retry states: enrollment.spec.ts',
   ...Object.fromEntries(['#guardrails-ask', '#guardrails-deny', '#denials-back', '#denials-close', '#denials-latest', '#denials-older',
