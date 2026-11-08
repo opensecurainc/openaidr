@@ -4937,7 +4937,7 @@ for (const maxWindowHeight of [720,240]) {
       expect(await page.locator('#app').evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
       expect(await page.locator('#app').evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
     }
-    for (const selector of ['#continue-free','#choose-organization']) {
+    for (const selector of ['#setup-google-signin','#continue-free','#choose-organization']) {
       if (maxWindowHeight < 720) await page.locator(selector).scrollIntoViewIfNeeded();
       await expect(page.locator(selector)).toBeInViewport({ratio:1});
     }
@@ -7110,13 +7110,18 @@ for (const maxWindowHeight of [720,320]) {
     expect(cards[0].width).toBe(cards[1].width);
     expect(cards[0].height).toBe(cards[1].height);
     expect(cards[0].x + cards[0].width).toBeLessThan(cards[1].x);
-    const buttons = await page.locator('.setup-choice-actions > .button').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
-    expect(buttons[0]).toBe(buttons[1]);
+    const buttons = await page.locator('.setup-choice-actions .button').evaluateAll(nodes => nodes.map(node => {
+      const {x,y,width,height} = node.getBoundingClientRect(); return {x,y,width,height,fits:node.scrollWidth <= node.clientWidth && node.scrollHeight <= node.clientHeight};
+    }));
+    expect(buttons).toHaveLength(3);
+    expect(buttons.every(button => button.y === buttons[0].y && button.height === buttons[0].height && button.fits)).toBe(true);
+    expect(buttons[0].width).toBe(buttons[1].width);
+    expect(buttons[0].x + buttons[0].width).toBeLessThan(buttons[1].x);
     expect(await page.locator('#app').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     if (maxWindowHeight === 720) await expectFitsWindow(page);
     else expect(await page.locator('#app').evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
     await page.screenshot({path:testInfo.outputPath('free-onboarding.png'),animations:'disabled'});
-    for (const id of ['continue-free','choose-organization','data-use','change-connection','check-update','show-about']) {
+    for (const id of ['setup-google-signin','continue-free','choose-organization','data-use','change-connection','check-update','show-about']) {
       await page.locator('#' + id).focus();
       await expect(page.locator('#' + id)).toBeInViewport({ratio:1});
     }
@@ -7165,16 +7170,16 @@ function freeStatus() {
       guardrail_available:true,credit_status:'disabled',credits_per_usd:'100',reset_at:null}};
 }
 
-test('Continue for free retries failures then enrolls once and automatically sets up the sensor', async ({page}) => {
+test('Continue without signing in retries failures then enrolls once and automatically sets up the sensor', async ({page}) => {
   const ready = freeStatus();
   await boot(page, {status:unenrolled,setupChoices:true,freeError:'Free setup is rate limited. Wait and try again with the same installation.',
     afterEnroll:{...ready,service:'not installed',running:false},afterSetup:ready,usage:populatedUsage()});
-  await page.getByRole('button', {name:'Continue for free',exact:true}).click();
+  await page.getByRole('button', {name:'Continue without signing in',exact:true}).click();
   await expect(page.locator('#notice')).toContainText('rate limited');
   await expect(page.locator('#continue-free')).toBeEnabled();
   expect((await requests(page)).filter(row => row.action === 'setup')).toHaveLength(0);
   await page.evaluate(() => { const mock = (window as unknown as {mock:Mock}).mock; mock.freeError = ''; mock.pendingAction = 'free.connect'; });
-  await page.getByRole('button', {name:'Continue for free',exact:true}).click();
+  await page.getByRole('button', {name:'Continue without signing in',exact:true}).click();
   await expect(page.locator('#continue-free')).toBeDisabled();
   await expect(page.locator('#choose-organization')).toBeDisabled();
   expect((await requests(page)).filter(row => row.action === 'free.connect')).toHaveLength(2);
@@ -7283,7 +7288,7 @@ for (const maxWindowHeight of [720,320]) {
       apiKeyError:'The API key was rejected. Check the key and try again.',
       afterEnroll:{...ready,service:'not installed',running:false},afterSetup:ready,usage:populatedUsage()});
     await expect(page.getByRole('button', {name:'Use an API key',exact:true})).toBeHidden();
-    await page.getByRole('button', {name:'Continue for free',exact:true}).click();
+    await page.getByRole('button', {name:'Continue without signing in',exact:true}).click();
     const trigger = page.getByRole('button', {name:'Use an API key',exact:true});
     await expect(trigger).toBeVisible();
     await trigger.focus(); await expect(trigger).toBeInViewport({ratio:1});
@@ -8225,7 +8230,7 @@ for (const maxWindowHeight of [720, 420]) test(`enterprise enrollment and Settin
   test.skip(process.env.OPENAIDR_DESKTOP_EDITION !== 'enterprise', 'Enterprise build only');
   await boot(page, {status:unenrolled, preview, afterEnroll:converged, maxWindowHeight});
   await expect(page.locator('#resume-app')).toBeHidden();
-  for (const selector of ['#continue-free', '#use-api-key', '#api-key-dialog', '#choose-local-runtime', '#local-runtime-view', '#back-to-choices']) {
+  for (const selector of ['#setup-google-signin', '#google-connection', '#continue-free', '#use-api-key', '#api-key-dialog', '#choose-local-runtime', '#local-runtime-view', '#back-to-choices']) {
     await expect(page.locator(selector)).toHaveCount(0);
   }
   await expect(page.locator('#enrollment-link')).toBeVisible();
@@ -8293,6 +8298,79 @@ for (const maxWindowHeight of [720, 320]) {
     await page.locator('#free-plan-toggle').click();
     await page.locator('#free-plan-refresh').scrollIntoViewIfNeeded();
     await expect(page.locator('#free-plan-refresh')).toBeInViewport({ratio:1});
+  });
+}
+
+test('welcome Google sign-in enrolls and sets up once before connecting the account', async ({page}) => {
+  const ready = freeStatus();
+  await boot(page,{status:unenrolled,setupChoices:true,pendingAction:'free.connect',
+    afterEnroll:{...ready,service:'not installed',running:false},afterSetup:ready,googleStatus:'approved'});
+  await page.getByRole('button', {name:'Sign in with Google',exact:true}).click();
+  await expect(page.locator('#setup-google-signin')).toBeDisabled();
+  await expect(page.locator('#continue-free')).toBeDisabled();
+  expect((await requests(page)).filter(row => row.action.startsWith('google.'))).toEqual([]);
+  await page.evaluate(() => { const win = window as unknown as {mock:Mock;completeRequest:() => void}; win.mock.pendingAction = undefined; win.completeRequest(); });
+  await expect(page.locator('#setup-choices')).toBeHidden();
+  await expect.poll(async () => (await requests(page)).filter(row => row.action === 'google.connect').length).toBe(1);
+  await openSensorStatus(page, false);
+  await expect(page.locator('#google-console')).toBeVisible();
+  await expect(page.locator('#credit-owner')).toHaveText('user@example.com');
+  const actions = (await requests(page)).map(row => row.action);
+  expect(actions.filter(action => ['free.connect','setup','google.start','google.poll','google.connect'].includes(action)))
+    .toEqual(['free.connect','setup','google.start','google.poll','google.connect']);
+});
+
+test('welcome Google sign-in waits for successful free setup and allows retry', async ({page}) => {
+  await boot(page,{status:unenrolled,setupChoices:true,freeError:'Free setup is rate limited. Try again.',afterEnroll:freeStatus()});
+  await page.locator('#setup-google-signin').click();
+  await expect(page.locator('#notice')).toContainText('rate limited');
+  await expect(page.locator('#setup-google-signin')).toBeEnabled();
+  await expect(page.locator('#continue-free')).toBeEnabled();
+  expect((await requests(page)).filter(row => row.action.startsWith('google.'))).toEqual([]);
+  await page.evaluate(() => { (window as unknown as {mock:Mock}).mock.freeError = undefined; });
+  await page.locator('#setup-google-signin').click();
+  await expect(page.locator('#google-message')).toBeVisible();
+  await expect(page.locator('#google-message')).toContainText('confirm this device');
+  expect((await requests(page)).filter(row => row.action === 'google.start')).toHaveLength(1);
+});
+
+test('skipping Google sign-in keeps the option available later without enrolling again', async ({page}) => {
+  await boot(page,{status:unenrolled,setupChoices:true,afterEnroll:freeStatus(),usage:populatedUsage(),googleStatus:'approved'});
+  await page.getByRole('button', {name:'Continue without signing in',exact:true}).click();
+  await expect(page.getByRole('tab', {name:'Usage',exact:true})).toBeVisible();
+  expect((await requests(page)).filter(row => row.action.startsWith('google.'))).toEqual([]);
+  await openSensorStatus(page, false);
+  await expect(page.locator('#google-signin')).toBeVisible();
+  await page.locator('#google-signin').click();
+  await openSensorStatus(page, false);
+  await expect(page.locator('#google-console')).toBeVisible();
+  await expect(page.locator('#credit-owner')).toHaveText('user@example.com');
+  expect((await requests(page)).filter(row => row.action === 'free.connect')).toHaveLength(1);
+  expect((await requests(page)).filter(row => row.action === 'google.connect')).toHaveLength(1);
+  expect(await page.evaluate(() => (window as unknown as {mock:Mock}).mock.status.sensor_id)).toBe('sensor-1');
+});
+
+for (const outcome of ['cancel','error','expired'] as const) {
+  test(`welcome Google sign-in ${outcome} leaves free access and later sign-in available`, async ({page}) => {
+    await page.clock.install();
+    await boot(page,{status:unenrolled,setupChoices:true,afterEnroll:freeStatus(),
+      googleError:outcome === 'error' ? 'Could not open your browser. Retry Google sign-in.' : undefined,
+      googleStatus:outcome === 'expired' ? 'expired' : 'pending'});
+    await page.locator('#setup-google-signin').click();
+    await expect(page.locator('#google-message')).toBeVisible();
+    if (outcome === 'cancel') await page.locator('#google-cancel').click();
+    await expect(page.locator('#google-message')).toContainText(outcome === 'cancel' ? 'paused' : outcome === 'error' ? 'Could not open your browser' : 'expired');
+    await expect(page.locator('#google-signin')).toBeEnabled();
+    await page.clock.fastForward(6000);
+    expect((await requests(page)).filter(row => row.action === 'google.connect')).toHaveLength(0);
+    await page.locator('#close-status').click();
+    await expect(page.getByRole('tab', {name:'Usage',exact:true})).toBeVisible();
+    await page.evaluate(() => { const mock = (window as unknown as {mock:Mock}).mock; mock.googleError = undefined; mock.googleStatus = 'approved'; });
+    await openSensorStatus(page, false);
+    await page.locator('#google-signin').click();
+    await openSensorStatus(page, false);
+    await expect(page.locator('#google-console')).toBeVisible();
+    expect((await requests(page)).filter(row => row.action === 'free.connect')).toHaveLength(1);
   });
 }
 

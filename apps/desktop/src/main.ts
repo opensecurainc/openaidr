@@ -145,8 +145,8 @@ app.innerHTML = `
     ${enterpriseOnly ? '' : `<div class="setup-options">
       <section class="card setup-choice" aria-labelledby="free-title">
         <div class="setup-choice-heading"><span class="setup-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="13" rx="2"/><path d="m9 16-1 5m7-5 1 5M2 21h20"/></svg></span><h2 id="free-title">Use OpenAIDR<br>for free</h2></div>
-        <p>Cloud guardrails with a free usage allowance.<br>No account required.</p>
-        <div class="setup-choice-actions"><button id="continue-free" class="button" type="button">Continue for free</button><button id="use-api-key" class="setup-data-link" type="button" aria-haspopup="dialog" aria-controls="api-key-dialog" hidden>Use an API key</button><button id="data-use" class="setup-data-link" type="button" aria-haspopup="dialog" aria-controls="data-use-dialog">How your data is used</button></div>
+        <p>Get 200 free credits each week with Google. Or try OpenAIDR without an account.</p>
+        <div class="setup-choice-actions"><div class="setup-signin-actions"><button id="setup-google-signin" class="button button-secondary" type="button">Sign in with Google</button><button id="continue-free" class="button button-secondary" type="button">Continue without signing in</button></div><button id="use-api-key" class="setup-data-link" type="button" aria-haspopup="dialog" aria-controls="api-key-dialog" hidden>Use an API key</button><button id="data-use" class="setup-data-link" type="button" aria-haspopup="dialog" aria-controls="data-use-dialog">How your data is used</button></div>
       </section>
       <section class="card setup-choice organization-choice" aria-labelledby="organization-title">
         <div class="setup-choice-heading"><span class="setup-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 21V3h12v18m0-12h6v12M1 21h22M7 7h4M7 11h4M7 15h4M18 13v1m0 3v1"/></svg></span><h2 id="organization-title">Connect to your<br>organization</h2></div>
@@ -951,7 +951,7 @@ async function runSetup() {
   } finally { busy = false; settingUp = false; availability(); }
 }
 async function perform(action: string, params: Record<string, unknown>) {
-  if (busy) return;
+  if (busy) return false;
   busy = true; availability(); notice('Connecting…', 'pending');
   try {
     const result = await request(action, params);
@@ -968,12 +968,14 @@ async function perform(action: string, params: Record<string, unknown>) {
       el('stats').hidden = true; el('retry-row').hidden = true;
     }
     notice('');
+    return true;
   }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (action === 'free.connect' && message.startsWith('Free setup is rate limited.')) freeRateLimited = true;
     if (action === 'api-key.connect') { text('api-key-error', message); el('api-key-error').hidden = false; notice(''); }
     else notice(message, 'error');
+    return false;
   }
   finally {
     // Packaged sensors unpack their runtime before answering. Give a restarted
@@ -992,6 +994,11 @@ el('retry').addEventListener('click', () => {
 const apiKeyDialog = el('api-key-dialog') as HTMLDialogElement | null;
 if (!enterpriseOnly) {
   el('continue-free').addEventListener('click', () => { void perform('free.connect', {}); });
+  el('setup-google-signin').addEventListener('click', async () => {
+    if (!await perform('free.connect', {}) || !current?.enrolled || current.connection_mode !== 'free' || current.disabled || current.desktop_removal) return;
+    setStatusOpen(true);
+    await googleConnection!.start();
+  });
   const apiKeyInput = el('api-key') as HTMLInputElement;
   el('use-api-key').addEventListener('click', () => {
     el('api-key-error').hidden = true; apiKeyInput.value = ''; availability(); apiKeyDialog!.showModal(); apiKeyInput.focus();

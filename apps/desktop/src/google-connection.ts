@@ -37,8 +37,8 @@ export function initGoogleConnection(parent:HTMLElement, request:Request, connec
       stop(); say(error instanceof Error ? error.message : 'Could not verify Google sign-in. Try again.');
     }
   }
-  signin.addEventListener('click', async () => {
-    if (!enabled || pending) return;
+  async function start() {
+    if (!enabled || pending || !identity) return;
     pending = true; const current = ++revision; cancel.hidden = false; availability();
     say('Opening Google sign-in in your browser…');
     try {
@@ -51,12 +51,14 @@ export function initGoogleConnection(parent:HTMLElement, request:Request, connec
       if (current !== revision) return;
       stop(); say(error instanceof Error ? error.message : 'Could not start Google sign-in. Try again.');
     }
-  });
+  }
+  signin.addEventListener('click', () => { void start(); });
   cancel.addEventListener('click', () => { stop(); say('Sign-in paused. Select Sign in with Google to resume.'); });
   consoleButton.addEventListener('click', () => {
     void request('desktop.dashboard', {server_url:'https://console.opensecura.ai/'}).catch(() => say('Could not open your browser. Open https://console.opensecura.ai/ to view your account.'));
   });
   return {
+    start,
     setAvailability(value:boolean) { enabled = value; availability(); },
     setStatus(status:Status) {
       const next = status.enrolled && !status.disabled && !status.desktop_removal &&
