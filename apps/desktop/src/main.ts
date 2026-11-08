@@ -995,9 +995,12 @@ const apiKeyDialog = el('api-key-dialog') as HTMLDialogElement | null;
 if (!enterpriseOnly) {
   el('continue-free').addEventListener('click', () => { void perform('free.connect', {}); });
   el('setup-google-signin').addEventListener('click', async () => {
-    if (!await perform('free.connect', {}) || !current?.enrolled || current.connection_mode !== 'free' || current.disabled || current.desktop_removal) return;
-    setStatusOpen(true);
-    await googleConnection!.start();
+    if (!await perform('free.connect', {})) return;
+    if (current?.enrolled && current.connection_mode === 'free' && !current.disabled && !current.desktop_removal) {
+      setStatusOpen(true);
+      if (await googleConnection!.start()) return;
+    }
+    notice('Free setup completed, but Google sign-in could not start. When the sensor is available, open sensor status and select Sign in with Google to finish.');
   });
   const apiKeyInput = el('api-key') as HTMLInputElement;
   el('use-api-key').addEventListener('click', () => {

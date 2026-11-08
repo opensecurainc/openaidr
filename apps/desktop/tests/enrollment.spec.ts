@@ -8334,6 +8334,44 @@ test('welcome Google sign-in waits for successful free setup and allows retry', 
   expect((await requests(page)).filter(row => row.action === 'google.start')).toHaveLength(1);
 });
 
+for (const statusRead of ['pending','failed','cached'] as const) {
+  test(`welcome Google sign-in explains a ${statusRead} status read and allows signing in later`, async ({page}) => {
+    const ready = freeStatus();
+    await boot(page,{status:unenrolled,setupChoices:true,afterEnroll:statusRead === 'cached'
+      ? {...ready,desktop_update:{state:'installing',status_cached:true}} : ready});
+    if (statusRead === 'pending') {
+      await page.evaluate(() => {
+        (window as unknown as {mock:Mock}).mock.pendingAction = 'status';
+        window.dispatchEvent(new Event('focus'));
+      });
+      await expect.poll(() => page.evaluate(() => typeof (window as unknown as {completeRequest?:unknown}).completeRequest)).toBe('function');
+    } else if (statusRead === 'failed') {
+      await page.evaluate(() => { (window as unknown as {mock:Mock}).mock.statusError = 'Sensor status unavailable'; });
+    }
+    await page.locator('#setup-google-signin').click();
+    await expect(page.locator('#notice')).toBeVisible();
+    await expect(page.locator('#notice')).toContainText('Google sign-in could not start');
+    await expect(page.locator('#notice')).toContainText('open sensor status and select Sign in with Google');
+    expect((await requests(page)).filter(row => row.action.startsWith('google.'))).toEqual([]);
+    if (statusRead === 'cached') {
+      await expect(page.locator('#google-signin')).toBeVisible();
+      await expect(page.locator('#google-signin')).toBeDisabled();
+    }
+    await page.evaluate(() => {
+      const win = window as unknown as {mock:Mock;completeRequest?:() => void};
+      win.mock.statusError = undefined; win.mock.status.desktop_update = undefined;
+      win.mock.googleStatus = 'approved'; win.mock.pendingAction = undefined; win.completeRequest?.();
+    });
+    await returnToWindow(page);
+    await openSensorStatus(page, false);
+    await page.locator('#google-signin').click();
+    await openSensorStatus(page, false);
+    await expect(page.locator('#google-console')).toBeVisible();
+    expect((await requests(page)).filter(row => row.action === 'free.connect')).toHaveLength(1);
+    expect((await requests(page)).filter(row => row.action === 'google.connect')).toHaveLength(1);
+  });
+}
+
 test('skipping Google sign-in keeps the option available later without enrolling again', async ({page}) => {
   await boot(page,{status:unenrolled,setupChoices:true,afterEnroll:freeStatus(),usage:populatedUsage(),googleStatus:'approved'});
   await page.getByRole('button', {name:'Continue without signing in',exact:true}).click();
