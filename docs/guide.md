@@ -27,10 +27,14 @@ server are not needed for personal use. Source builds have the separate
 
 ### Personal: free allowance
 
-1. Open the app and choose **Continue for free**. No OpenSecura account or API
-   key is required.
+1. Open the app and choose **Sign in with Google** for 200 weekly credits, or
+   **Continue without signing in** for a starter allowance. No API key is required.
 2. Let setup start the sensor and configure detected supported agents.
 3. Restart agent sessions, then review usage and guardrail activity in the app.
+
+If you skip sign-in or cancel it, you can sign in later by opening sensor status
+at the top of the app and selecting **Sign in with Google**. Your local history
+is kept when you connect your account.
 
 Personal guardrails use **Shadow** mode by default: checks are recorded and
 actions continue. [Local rules](#personal-local-rules-and-enforce) can

@@ -100,11 +100,11 @@ fn evidence(webview: &tauri::WebviewWindow, scenario: &str, ocr: &std::path::Pat
         if metrics["fits"] != json!(true) { break; }
         let output = std::process::Command::new(ocr).arg("--text").arg(&image).output().unwrap();
         assert!(output.status.success(), "Could not read startup screenshot: {}", String::from_utf8_lossy(&output.stderr));
-        let text = String::from_utf8(output.stdout).unwrap();
+        let text = String::from_utf8(output.stdout).unwrap().split_whitespace().collect::<Vec<_>>().join(" ");
         let labels = if edition == "enterprise" {
             ["Connect your organization", "Enrollment link", "Settings", "Check updates"]
         } else {
-            ["Continue for free", "Connect organization", "Settings", "Check updates"]
+            ["Continue without signing in", "Connect organization", "Settings", "Check updates"]
         };
         let painted = labels.iter().all(|label| text.contains(label));
         metrics["screenshot_text"] = json!(text);

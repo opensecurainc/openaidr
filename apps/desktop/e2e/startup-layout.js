@@ -1,7 +1,7 @@
 (() => {
   const app = document.querySelector('#app');
   const edition = document.querySelector('main')?.dataset.desktopEdition ?? 'standard';
-  const selectors = edition === 'enterprise' ? ['#enrollment-link', '#connect-link'] : ['#continue-free', '#choose-organization'];
+  const selectors = edition === 'enterprise' ? ['#enrollment-link', '#connect-link'] : ['#setup-google-signin', '#continue-free', '#choose-organization'];
   const errors = window.__startupErrors ?? window.__e2eErrors ?? [];
   if (!app || !document.querySelector('main') || !selectors.every(selector => document.querySelector(selector)))
     return {fits:false, hidden:document.hidden, viewport:{width:innerWidth,height:innerHeight}, errors, error:'Setup choices have not rendered'};

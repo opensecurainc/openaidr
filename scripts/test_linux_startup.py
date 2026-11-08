@@ -43,7 +43,7 @@ def main():
                     raise RuntimeError(f"App exited before setup appeared: {app.returncode}")
                 for candidate in pyatspi.Registry.getDesktop(0):
                     names.update(accessible_names(candidate))
-                if "Continue for free" in names:
+                if {"Sign in with Google", "Continue without signing in"} <= names:
                     break
                 time.sleep(1)
             else:

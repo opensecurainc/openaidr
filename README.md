@@ -52,9 +52,10 @@ Coverage is limited to supported tools and known configuration locations. See
 
 ## Get started
 
-**Try it free.** Download the app and choose **Continue for free**. There is
-no account, API key, or local server to set up, and every install includes a
-free allowance of cloud guardrail checks. Teams can evaluate the full workspace
+**Try it free.** Download the app and choose **Sign in with Google** for 200
+weekly credits, or **Continue without signing in** for a starter allowance.
+You can sign in later from sensor status. No API key or local server is required.
+Teams can evaluate the full workspace
 for free with a local runtime, or join an existing workspace with an enrollment
 link. Build from source to develop OpenAIDR or run the open-source edition
 yourself.
@@ -79,7 +80,7 @@ See [Microsoft's SmartScreen guidance](https://learn.microsoft.com/en-us/windows
 
 </details>
 
-**Personal.** After **Continue for free**, setup starts the sensor and
+**Personal.** Setup starts the sensor and
 configures detected agents. Restart your agent sessions, then review usage and
 guardrail activity in the app. Personal connections run checks in Shadow mode
 by default. For paid access,

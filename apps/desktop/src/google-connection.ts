@@ -37,26 +37,29 @@ export function initGoogleConnection(parent:HTMLElement, request:Request, connec
       stop(); say(error instanceof Error ? error.message : 'Could not verify Google sign-in. Try again.');
     }
   }
-  signin.addEventListener('click', async () => {
-    if (!enabled || pending) return;
+  async function start() {
+    if (!enabled || pending || !identity) return false;
     pending = true; const current = ++revision; cancel.hidden = false; availability();
     say('Opening Google sign-in in your browser…');
     try {
       const result = await request('google.start') as Pairing;
-      if (current !== revision) return;
-      if (result.status === 'expired') { stop(); say('Sign-in expired. Start again from this app.'); return; }
+      if (current !== revision) return true;
+      if (result.status === 'expired') { stop(); say('Sign-in expired. Start again from this app.'); return true; }
       say('Finish Google sign-in and confirm this device in your browser.');
       await poll(current);
     } catch (error) {
-      if (current !== revision) return;
+      if (current !== revision) return true;
       stop(); say(error instanceof Error ? error.message : 'Could not start Google sign-in. Try again.');
     }
-  });
+    return true;
+  }
+  signin.addEventListener('click', () => { void start(); });
   cancel.addEventListener('click', () => { stop(); say('Sign-in paused. Select Sign in with Google to resume.'); });
   consoleButton.addEventListener('click', () => {
     void request('desktop.dashboard', {server_url:'https://console.opensecura.ai/'}).catch(() => say('Could not open your browser. Open https://console.opensecura.ai/ to view your account.'));
   });
   return {
+    start,
     setAvailability(value:boolean) { enabled = value; availability(); },
     setStatus(status:Status) {
       const next = status.enrolled && !status.disabled && !status.desktop_removal &&
