@@ -10,6 +10,7 @@ def initialize(db):
         event_key TEXT NOT NULL,legacy_key TEXT NOT NULL,happened_at REAL NOT NULL,
         partial INTEGER NOT NULL,PRIMARY KEY(event_key,legacy_key)
     ) WITHOUT ROWID""")
+    db.execute("CREATE INDEX IF NOT EXISTS usage_request_aliases_expiry ON usage_request_aliases(happened_at)")
 
 
 def bind(db, scope, application, item, legacy_key, *, partial=False):

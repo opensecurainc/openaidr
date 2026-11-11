@@ -520,12 +520,23 @@ def test_unchanged_files_are_not_read_again_and_truncated_file_replays(tmp_path,
         ])
         telemetry.import_usage(threading.Event())
         original = Path.open
+        relative_to = Path.is_relative_to
+        boundary_checks = []
         with monkeypatch.context() as patch:
             def unchanged(self, *args, **kwargs):
                 assert self != path, "unchanged transcript must not be read"
                 return original(self, *args, **kwargs)
+            def boundary(self, *args):
+                if self == path:
+                    boundary_checks.append(1)
+                return relative_to(self, *args)
             patch.setattr(Path, "open", unchanged)
+            patch.setattr(Path, "is_relative_to", boundary)
             assert usage_import.run_once(cfg, telemetry.queue, threading.Event())
+            checked = len(boundary_checks)
+            assert checked
+            assert usage_import.run_once(cfg, telemetry.queue, threading.Event())
+            assert len(boundary_checks) == checked, "unchanged roots must reuse lexical path checks"
         write_history(path, [context(), request_record(clock.current - timedelta(seconds=1), "new")])
         telemetry.import_usage(threading.Event())
         assert read(cfg)["summary"]["calls"] == 2
@@ -649,6 +660,10 @@ def test_invalid_unmatched_and_missing_sources_remain_visible(tmp_path, clock, h
         cfg["hooks"] = {"homes": {"codex": str(history_home / "missing-profile")}}
         telemetry.import_usage(threading.Event())
         assert usage_import.recovery_status(telemetry.queue.db)["inaccessible_sources"] == 1
+        cfg["hooks"]["homes"]["claude"] = str(history_home / "other-claude")
+        telemetry.import_usage(threading.Event())
+        assert usage_import.recovery_status(telemetry.queue.db)["inaccessible_files"] == 0
+        assert not telemetry.queue.db.execute("SELECT 1 FROM usage_request_files WHERE path=?", (str(path),)).fetchone()
     finally:
         telemetry.close()
 
@@ -868,3 +883,50 @@ def test_legacy_request_upgrade_work_scales_with_retained_history(tmp_path, cloc
         finally:
             telemetry.close()
     assert work[1] < work[0] * 3, f"Doubling retained history must not quadruple database work: {work}"
+
+
+@pytest.mark.parametrize("operation", ["metrics", "unknown_native", "history"])
+def test_usage_maintenance_work_does_not_scale_with_unexpired_metadata(tmp_path, clock, history_home, operation):
+    from openaidr.sensor import usage_recovery_aliases
+
+    work = []
+    when = (clock.current - timedelta(days=2)).timestamp()
+    expired = (clock.current - timedelta(days=35)).timestamp()
+    for count in (250, 2500):
+        cfg = config(tmp_path / str(count))
+        telemetry = Telemetry(cfg)
+        db = telemetry.queue.db
+        try:
+            with db:
+                usage_recovery_aliases.initialize(db)
+                keys = [(f"legacy-{index}", when) for index in range(count)] + [("expired", expired)]
+                db.executemany("INSERT INTO usage_sources VALUES (?,'codex','legacy',?)", keys)
+                db.executemany("INSERT INTO usage_recovered VALUES (?,'codex',?,'gpt-6.1-sol','high',1200,0,1000,200,.5,'')", keys)
+                db.executemany("INSERT INTO usage_request_aliases VALUES (?,?,?,1)", [
+                    (key, "history:" + key, stamp) for key, stamp in keys])
+                # Keep the history admission checks independent of the size of
+                # retained metadata; this test measures expiry and withdrawal.
+                for app in ("codex", "claude_code", "workbuddy"):
+                    db.execute("INSERT INTO usage_sources VALUES (?,?,'native_unknown',?)", ("unknown-" + app, app, when))
+                    db.execute("INSERT INTO usage_imports VALUES (?,?,?,1)", (telemetry.queue.usage_scope, app, when))
+            steps = []
+            db.set_progress_handler(lambda: steps.append(1) or 0, 100)
+            try:
+                if operation == "history":
+                    assert usage_import.requests_once(cfg, telemetry.queue, threading.Event())
+                elif operation == "metrics":
+                    telemetry.queue.confirm(telemetry.queue.append("metrics", b"{}", "application/json", 0))
+                else:
+                    unknown = event("unknown", input_token_count=1, output_token_count=1)
+                    del unknown[1]["response_id"]
+                    telemetry.accept("logs", body(clock.current - timedelta(seconds=1), unknown), "application/json")
+            finally:
+                db.set_progress_handler(None, 0)
+            work.append(len(steps))
+            assert db.execute("SELECT count(*) FROM usage_recovered").fetchone()[0] == count
+            assert not db.execute("SELECT 1 FROM usage_sources WHERE event_key='expired'").fetchone()
+            if operation == "history":
+                assert db.execute("SELECT count(*) FROM usage_request_aliases").fetchone()[0] == count
+        finally:
+            telemetry.close()
+    assert work[1] < max(work[0] * 3, 30), f"Ten times the retained metadata must not require a full scan: {work}"

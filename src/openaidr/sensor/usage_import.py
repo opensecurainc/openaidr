@@ -3,6 +3,7 @@
 from contextlib import closing
 from datetime import datetime, timezone
 from decimal import Decimal
+from functools import lru_cache
 import hashlib
 from itertools import groupby
 import json
@@ -287,6 +288,12 @@ def roots(config, application):
         homes.update(path.parent for path in hooks.codex_paths(config))
     names = ("sessions", "archived_sessions") if agent == "codex" else ("projects",)
     return sorted({(home / name).expanduser().resolve() for home in homes for name in names})
+
+
+@lru_cache(maxsize=8192)
+def under_roots(path, roots):
+    # Only lexical ancestry is stable; filesystem and privacy checks remain live.
+    return any(Path(path).is_relative_to(root) for root in roots)
 
 
 def files(config, application, since):
@@ -816,7 +823,7 @@ def requests_once(config, queue, stop, paused=lambda: False):
                                     size=0, mtime_ns=0, offset=0, anchor="", state="{}", generation=generations[app], version=IMPORT_VERSION,
                                     blocked=0, invalid=0, unsupported=0, scanned_at=now)), "inaccessible": 1}
                 for key, previous in saved.items():
-                    if key[0] == app and key not in seen and any(Path(key[1]).is_relative_to(root) for root in app_roots):
+                    if key[0] == app and key not in seen and under_roots(key[1], tuple(app_roots)):
                         plans[key] = {**previous, "inaccessible": 1}
                 sources[app] = len(unavailable)
             # Identity proof precedes admission, including across applications for
@@ -833,8 +840,8 @@ def requests_once(config, queue, stop, paused=lambda: False):
                     permitted = app not in unfinished and usage_recovery.allowed(queue.db, app)
                 if permitted:
                     for key, previous in saved.items():
-                        if key[0] != app or not previous["blocked"] or (allowed[app] and key in plans) or not any(
-                                Path(key[1]).is_relative_to(root) for root in current_roots[app]):
+                        if key[0] != app or not previous["blocked"] or (allowed[app] and key in plans) or not under_roots(
+                                key[1], tuple(current_roots[app])):
                             continue
                         path = Path(key[1])
                         try:
@@ -869,8 +876,7 @@ def requests_once(config, queue, stop, paused=lambda: False):
                                                  "offset", "anchor", "state", "generation", "version", "blocked", "invalid", "unsupported", "inaccessible", "scanned_at")))
                     queue.db.execute("INSERT OR REPLACE INTO usage_request_sources VALUES (?,?,?)", (app, now, sources[app]))
                     queue.db.executemany("DELETE FROM usage_request_files WHERE application=? AND path=?", [
-                        key for key in saved if key[0] == app and not any(
-                            Path(key[1]).is_relative_to(root) for root in current_roots[app])])
+                        key for key in saved if key[0] == app and not under_roots(key[1], tuple(current_roots[app]))])
                     queue.db.execute("DELETE FROM usage_request_files WHERE (mtime_ns>0 AND mtime_ns<?) "
                                      "OR (mtime_ns=0 AND scanned_at<?)", (int(since * 1e9), since))
                     queue.db.execute("DELETE FROM usage_request_aliases WHERE happened_at<?", (since,))
