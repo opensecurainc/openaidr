@@ -216,6 +216,31 @@ def test_legacy_unknown_application_blocks_all_recovery_until_exact_identity_pro
         queue.close()
 
 
+def test_recovery_admission_does_not_scan_legacy_history(tmp_path, clock):
+    work = []
+    when = (clock.current - timedelta(days=2)).timestamp()
+    for count in (250, 2500):
+        cfg = config(tmp_path / str(count))
+        queue = ExportQueue(Path(cfg["data_dir"]) / "telemetry.sqlite3", usage_scope="original")
+        try:
+            with queue.db:
+                queue.db.executemany("INSERT INTO usage_calls VALUES ('original',?,?,'gpt-6.1-sol','high',1200,.5)",
+                                     [(f"history:detail-{i}", when) for i in range(count)])
+                queue.db.executemany("INSERT INTO usage_compacted VALUES (?,?)",
+                                     [(f"history:compacted-{i}", when) for i in range(count)])
+            steps = []
+            queue.db.set_progress_handler(lambda: steps.append(1) or 0, 100)
+            try:
+                for app in ("codex", "claude_code", "workbuddy"):
+                    assert usage_recovery.allowed(queue.db, app)
+            finally:
+                queue.db.set_progress_handler(None, 0)
+            work.append(len(steps))
+        finally:
+            queue.close()
+    assert work[1] < max(work[0] * 3, 10), f"Legacy history must not cause full admission scans: {work}"
+
+
 @pytest.mark.parametrize("compact", [False, True])
 def test_failed_native_correction_rolls_back_recovery_and_export_together(tmp_path, clock, monkeypatch, compact):
     import sqlite3

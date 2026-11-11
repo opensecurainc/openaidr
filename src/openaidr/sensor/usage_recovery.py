@@ -5,11 +5,17 @@ from openaidr.core.agent_usage import text, token
 
 def initialize(db):
     db.executescript("""
+        CREATE INDEX IF NOT EXISTS usage_calls_native ON usage_calls(happened_at,event_key,scope)
+            WHERE event_key NOT LIKE 'history:%';
+        CREATE INDEX IF NOT EXISTS usage_compacted_native ON usage_compacted(event_key,happened_at)
+            WHERE event_key NOT LIKE 'history:%';
         CREATE TABLE IF NOT EXISTS usage_sources (
             event_key TEXT PRIMARY KEY, application TEXT NOT NULL,
             kind TEXT NOT NULL, happened_at REAL NOT NULL
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS usage_sources_application ON usage_sources(application,kind);
+        CREATE INDEX IF NOT EXISTS usage_sources_expiry ON usage_sources(happened_at);
+        CREATE INDEX IF NOT EXISTS usage_sources_recovered ON usage_sources(event_key) WHERE kind='recovered';
         CREATE TABLE IF NOT EXISTS usage_recovered (
             event_key TEXT PRIMARY KEY, application TEXT NOT NULL, happened_at REAL NOT NULL,
             model TEXT NOT NULL, effort TEXT NOT NULL, tokens INTEGER NOT NULL,
@@ -17,6 +23,7 @@ def initialize(db):
             output_tokens INTEGER NOT NULL, cost_usd REAL, service_tier TEXT NOT NULL
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS usage_recovered_application ON usage_recovered(application);
+        CREATE INDEX IF NOT EXISTS usage_recovered_expiry ON usage_recovered(happened_at);
         CREATE TABLE IF NOT EXISTS usage_recovery_state (
             application TEXT PRIMARY KEY, revision INTEGER NOT NULL
         ) WITHOUT ROWID;
@@ -81,9 +88,11 @@ def allowed(db, application):
             WHERE u.event_key NOT LIKE 'history:%' AND s.event_key IS NULL
             AND (a.application=? OR a.application IS NULL) AND u.happened_at>=? LIMIT 1""",
             (application, cutoff)).fetchone()
-        or db.execute("""SELECT 1 FROM usage_compacted c LEFT JOIN usage_sources s USING(event_key)
-            WHERE c.event_key NOT LIKE 'history:%' AND s.event_key IS NULL AND c.happened_at>=? LIMIT 1""",
-            (cutoff,)).fetchone()
+        or db.execute("""SELECT 1 FROM (
+            SELECT event_key FROM usage_compacted
+            WHERE event_key NOT LIKE 'history:%' AND happened_at>=?
+            EXCEPT SELECT event_key FROM usage_sources
+        ) LIMIT 1""", (cutoff,)).fetchone()
     )
 
 

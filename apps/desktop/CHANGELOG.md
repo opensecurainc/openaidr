@@ -7,6 +7,7 @@ Notes for published versions are attached to each
 
 ## Unreleased
 
+- Reduce background CPU use when maintaining large local usage histories and checking retained agent history.
 - Connect a free installation to a Google account through the system browser. Sign-in preserves local history and shares the account's weekly credits across devices.
 - Distinguish one-time starter credits from a Google account's weekly free allowance. Show the account and reset date when connected.
 - Fix WorkBuddy on Windows blocking every prompt and tool call with `spawn pwsh ENOENT` when PowerShell 7 is not installed. WorkBuddy guardrails now run in Git Bash or Windows PowerShell. If WorkBuddy cannot start either shell, OpenAIDR leaves WorkBuddy without guardrails instead of blocking it. Restart WorkBuddy after OpenAIDR updates its guardrails.
