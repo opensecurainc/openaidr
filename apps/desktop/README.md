@@ -944,6 +944,15 @@ channel and the default, or `openaidr-oss`, which reads
 `deploy/desktop` before its builds compile; `scripts/build_desktop.py` and
 `build.rs` read the same setting.
 
+The OSS publisher can supply its public verification key outside the clean
+source checkout with `OPENAIDR_OSS_UPDATER_PUBLIC_KEY_FILE`. This override is
+used only for `openaidr-oss`. Build with `--oss-updater`, select that channel,
+and reserve `OPENAIDR_RELEASE_DATE` once for all platforms. The build embeds
+the verification key and feed without receiving the private update key.
+The publisher signs and verifies the final payloads separately. An OSS key
+must differ from the enterprise key. Existing manual-only builds need one
+manual installation of an update-enabled release.
+
 macOS release builds with signed Tauri update archives check
 `https://releases.opensecura.ai/openaidr/rollout-v2.json` when a check is due at
 startup, then at least three hours after the previous attempt. The schedule

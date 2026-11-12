@@ -13,6 +13,11 @@ $installers = @(Get-ChildItem $Artifacts -Recurse -Filter '*_x64-setup.exe')
 if ($installers.Count -ne 1) { throw 'Expected exactly one Windows installer.' }
 New-Item -ItemType Directory -Force $Output | Out-Null
 $signature = Get-AuthenticodeSignature $installers[0].FullName
+if ($env:OPENAIDR_REQUIRE_AUTHENTICODE -eq '1' -and
+    ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate -or
+     $signature.SignerCertificate.Subject -notlike '*O="OpenSecura, Inc."*')) {
+  throw 'Update-enabled installers require a timestamped OpenSecura Authenticode signature.'
+}
 if ($signature.Status -notin @('Valid', 'NotSigned')) {
   throw "Installer signature is invalid: $($signature.Status)"
 }

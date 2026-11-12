@@ -549,7 +549,7 @@ pub fn initialize(app: &AppHandle, mode: Mode) {
 mod tests {
     use super::*;
 
-    fn fixture() -> Value { serde_json::from_str(include_str!("release-fixture.json")).unwrap() }
+    fn fixture() -> Value { release::test_fixture() }
 
     #[test]
     fn pending_updates_close_windows_only_for_a_live_enabled_handoff() {

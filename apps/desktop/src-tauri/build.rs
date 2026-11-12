@@ -28,7 +28,15 @@ fn main() {
         "openaidr-oss" => "updater-oss.pub",
         other => panic!("Unknown OPENAIDR_RELEASE_CHANNEL {other:?}; use openaidr or openaidr-oss"),
     };
-    let key = std::fs::canonicalize(root.join("deploy/desktop").join(key_file))
+    println!("cargo:rerun-if-env-changed=OPENAIDR_OSS_UPDATER_PUBLIC_KEY_FILE");
+    let key_path = if channel == "openaidr-oss" {
+        std::env::var_os("OPENAIDR_OSS_UPDATER_PUBLIC_KEY_FILE")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| root.join("deploy/desktop").join(key_file))
+    } else {
+        root.join("deploy/desktop").join(key_file)
+    };
+    let key = std::fs::canonicalize(key_path)
         .unwrap_or_else(|_| panic!("The {channel} release channel requires deploy/desktop/{key_file}"));
     println!("cargo:rerun-if-changed={}", key.display());
     println!("cargo:rustc-env=OPENAIDR_RELEASE_CHANNEL={channel}");
