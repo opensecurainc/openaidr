@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn first_launch_verifies_online_or_offline_downloads_before_installation() {
-        let fixture: Value = serde_json::from_str(include_str!("release-fixture.json")).unwrap();
+        let fixture: Value = release::test_fixture();
         let key = fixture["key"].as_str().unwrap();
         let release = release::from_manifest(&fixture["manifest"], key).unwrap();
         let bytes = STANDARD.decode(fixture["installer"].as_str().unwrap()).unwrap();
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn reopening_downloads_keeps_newer_installs_and_disabled_checks() {
-        let fixture: Value = serde_json::from_str(include_str!("release-fixture.json")).unwrap();
+        let fixture: Value = release::test_fixture();
         let key = fixture["key"].as_str().unwrap();
         let previous = release::from_manifest(&fixture["previous"]["manifest"], key).unwrap();
         let next = release::from_manifest(&fixture["manifest"], key).unwrap();
@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn older_download_reopens_either_verified_side_of_a_pending_update() {
-        let fixture: Value = serde_json::from_str(include_str!("release-fixture.json")).unwrap();
+        let fixture: Value = release::test_fixture();
         let key = fixture["key"].as_str().unwrap();
         let previous = release::from_manifest(&fixture["previous"]["manifest"], key).unwrap();
         let next = release::from_manifest(&fixture["manifest"], key).unwrap();
@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn manual_installation_retries_an_interrupted_replacement_without_losing_identity() {
-        let fixture: Value = serde_json::from_str(include_str!("release-fixture.json")).unwrap();
+        let fixture: Value = release::test_fixture();
         let key = fixture["key"].as_str().unwrap();
         let previous = release::from_manifest(&fixture["previous"]["manifest"], key).unwrap();
         let next = release::from_manifest(&fixture["manifest"], key).unwrap();

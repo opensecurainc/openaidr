@@ -559,7 +559,38 @@ its build. Secret-redaction patterns retain their bundled source license.
 
 ## Publishing a release
 
-A release needs both workflows on the same `main` commit. **Backend** creates
+### Public desktop downloads
+
+The official desktop installers are published at
+[OpenAIDR downloads](https://releases.opensecura.ai/openaidr-oss/).
+The private `opensecurainc/openaidr-oss-publish` repository owns their build,
+signing, verification, and publication procedure. Application source stays in
+this repository. Maintainers should follow that repository's current runbook.
+
+Select one full source commit that is merged into this repository's `main`.
+Build all platforms from that commit and require the complete native installer
+checks to pass. Retain the exact workflow run, attempt, artifact checksums,
+source identity, and signing evidence before preparing a publication.
+
+Publish versioned files without replacing existing bytes. Verify their public
+HTTPS downloads against the retained checksums before promoting the download
+page, release manifest, and fixed-name installer copies. The four README links
+use `openaidr-oss/latest/` and stay unchanged between releases. Their targets
+must advance together to the verified release.
+
+The download manifest records whether automatic updates are enabled. A download
+page or a new `latest/` copy alone does not configure the updater. Existing
+manual-only builds need one manual installation of an update-enabled release.
+Windows updates require timestamped OpenSecura Authenticode signatures. Linux
+in-app updates use the managed AppImage; DEB installations remain managed by
+the package manager. Keep update signing keys and release credentials out of
+this source repository.
+
+### GitHub packages used by setup.sh
+
+`setup.sh` still selects complete GitHub releases that include the local backend.
+This is a separate publication path from the public desktop downloads above.
+A GitHub package needs both workflows on the same `main` commit. **Backend** creates
 the prerelease with `build.json` and `openaidr-backend.tar.gz`; **App** only
 keeps its installers as Actions artifacts. `scripts/publish_app_assets.py`
 downloads those artifacts, checks their names, uploads them to the release, and
@@ -583,7 +614,8 @@ backend assets for the exact source commit have verified checksums. The manifest
 binds the full client and the private cloud exclusion recorded in `PUBLICATION.json`.
 Run `scripts/publish_app_assets.py --dry-run` to review the selected artifacts
 before publication. Existing assets with different bytes are rejected.
-After publication, update the README download links to the verified release tag.
+Publishing a GitHub package does not change the public desktop download links
+or promote an OSS update feed.
 
 ### Publish a Python package to PyPI
 

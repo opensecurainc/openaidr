@@ -149,16 +149,29 @@ impl Release {
 }
 
 #[cfg(test)]
+pub(super) fn test_fixture() -> Value {
+    #[cfg(windows)]
+    let mut fixture: Value = serde_json::from_str(include_str!("windows/release-fixture.json")).unwrap();
+    #[cfg(target_os = "linux")]
+    let mut fixture: Value = serde_json::from_str(include_str!("linux/release-fixture.json")).unwrap();
+    for pointer in ["/manifest", "/previous/manifest"] {
+        if let Some(manifest) = fixture.pointer_mut(pointer) {
+            let url = manifest["platforms"][TARGET]["url"].as_str().unwrap()
+                .replacen("https://releases.opensecura.ai/openaidr", crate::platform::RELEASE_PREFIX, 1);
+            manifest["platforms"][TARGET]["url"] = Value::String(url);
+        }
+    }
+    fixture
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
 
     fn fixture() -> (Value, String, Vec<u8>) {
         // Signed by an ephemeral test key. Only the public key is retained.
-        #[cfg(windows)]
-        let fixture: Value = serde_json::from_str(include_str!("windows/release-fixture.json")).unwrap();
-        #[cfg(target_os = "linux")]
-        let fixture: Value = serde_json::from_str(include_str!("linux/release-fixture.json")).unwrap();
+        let fixture = test_fixture();
         (fixture["manifest"].clone(), fixture["key"].as_str().unwrap().into(),
             STANDARD.decode(fixture["installer"].as_str().unwrap()).unwrap())
     }

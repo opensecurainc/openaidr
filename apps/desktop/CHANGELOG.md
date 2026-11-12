@@ -7,6 +7,7 @@ Notes for published versions are attached to each
 
 ## Unreleased
 
+- Enable signed OSS update builds to check their own update feed. Existing builds without update support need one manual installation of an update-enabled release.
 - Reduce background CPU use when maintaining large local usage histories and checking retained agent history.
 - Connect a free installation to a Google account through the system browser. Sign-in preserves local history and shares the account's weekly credits across devices.
 - Distinguish one-time starter credits from a Google account's weekly free allowance. Show the account and reset date when connected.

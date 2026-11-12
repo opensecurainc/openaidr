@@ -605,7 +605,7 @@ mod tests {
 
     #[test]
     fn rollout_checks_only_download_eligible_verified_releases() {
-        let fixture: Value = serde_json::from_str(include_str!("release-fixture.json")).unwrap();
+        let fixture: Value = release::test_fixture();
         let public_key = fixture["key"].as_str().unwrap();
         let payload = STANDARD.decode(fixture["installer"].as_str().unwrap()).unwrap();
         let manifest = Arc::new(Mutex::new(fixture["manifest"].clone()));
@@ -762,7 +762,7 @@ mod tests {
         let scratch = tempfile::tempdir().unwrap();
         let directory = scratch.path().join("desktop-update");
         storage::support("directory", &directory).unwrap();
-        let fixture: Value = serde_json::from_str(include_str!("release-fixture.json")).unwrap();
+        let fixture: Value = release::test_fixture();
         let release = release::from_manifest(&fixture["manifest"], fixture["key"].as_str().unwrap()).unwrap();
         let mut state = State { pending:Some(Pending { release, previous:json!({}), reopen_window:true, install_started:true, manual:false }), ..State::default() };
         state.set(&directory, "restarting").unwrap();

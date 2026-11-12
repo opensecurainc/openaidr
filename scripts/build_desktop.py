@@ -57,10 +57,35 @@ def release_feed(channel):
 
 
 def updater_public_key(channel):
-    path = ROOT / "deploy" / "desktop" / RELEASE_CHANNELS[channel]
+    supplied = os.environ.get("OPENAIDR_OSS_UPDATER_PUBLIC_KEY_FILE") if channel == "openaidr-oss" else None
+    path = Path(supplied).resolve() if supplied else ROOT / "deploy" / "desktop" / RELEASE_CHANNELS[channel]
     if not path.is_file():
         raise ValueError(f"The {channel} release channel requires deploy/desktop/{RELEASE_CHANNELS[channel]}")
     return path
+
+
+def oss_updater_settings():
+    """Configure the pinned OSS verifier without giving build tools a signing key."""
+    if release_channel() != "openaidr-oss":
+        raise ValueError("--oss-updater requires OPENAIDR_RELEASE_CHANNEL=openaidr-oss")
+    if not os.environ.get("OPENAIDR_RELEASE_DATE"):
+        raise ValueError("--oss-updater requires a reserved OPENAIDR_RELEASE_DATE")
+    public = updater_public_key("openaidr-oss").read_bytes()
+    try:
+        lines = public.decode("ascii").splitlines()
+        decoded = base64.b64decode(lines[1], validate=True)
+        if len(lines) != 2 or not lines[0].startswith("untrusted comment:") or len(decoded) != 42 or decoded[:2] != b"Ed":
+            raise ValueError
+    except (ValueError, IndexError, UnicodeError) as error:
+        raise ValueError("The OSS updater requires a Minisign public verification key") from error
+    enterprise = (ROOT / "deploy/desktop/updater.pub").read_bytes().splitlines()[1]
+    if decoded[10:] == base64.b64decode(enterprise, validate=True)[10:]:
+        raise ValueError("The OSS updater must use a separate key from the enterprise channel")
+    updater = {"pubkey": base64.b64encode(public).decode("ascii"),
+               "endpoints": [release_feed("openaidr-oss")]}
+    if sys.platform == "win32":
+        updater["windows"] = {"installMode": "quiet"}
+    return {"updater": updater}
 
 
 def adhoc_macos_config():
@@ -152,6 +177,10 @@ def main():
         "--release", action="store_true",
         help="Require release versions and credentials; create signed updater archives",
     )
+    parser.add_argument(
+        "--oss-updater", action="store_true",
+        help="Embed the OSS public verification key and publication identity; the publisher signs update artifacts separately",
+    )
     parser.add_argument("--simulation", action="store_true", help="Include local device simulation controls in a development build")
     parser.add_argument("--e2e-ui", action="store_true", help="Include macOS WebDriver for disposable hosted E2E tests")
     parser.add_argument(
@@ -183,6 +212,9 @@ def main():
                          "--e2e-ui or --no-bundle")
     if args.e2e_ui and (sys.platform != "darwin" or args.release or args.simulation or args.bundle_only):
         parser.error("--e2e-ui requires an unsigned macOS test build and cannot be combined with release or simulation")
+    if args.oss_updater and (args.sidecar_only or args.simulation or args.e2e_ui):
+        parser.error("--oss-updater requires a distributable desktop build")
+    oss_plugins = oss_updater_settings() if args.oss_updater else None
     if args.bundle_only:
         if os.name != "nt":
             parser.error("--bundle-only requires a native Windows build")
@@ -257,6 +289,8 @@ def main():
             settings["bundle"].setdefault("macOS", {}).update(release["bundle"].pop("macOS"))
         settings["bundle"].update(release["bundle"])
         settings["plugins"] = release["plugins"]
+    if oss_plugins:
+        settings["plugins"] = oss_plugins
     if args.bundle_only:
         # Runs no build tooling and none of the build's executables: the signing
         # job trusts only this checkout and pinned tools, never earlier outputs
@@ -485,7 +519,7 @@ def package(args, work, settings, config, info):
                                                 str(script): "harden-installation.ps1"})
         # Tauri runs this for the app executable, the uninstaller, and the installer.
         settings["bundle"]["windows"] = {"signCommand": {
-            "cmd": sys.executable, "args": [str(ROOT / "scripts/sign_windows.py"), "%1"],
+            "cmd": sys.executable, "args": [str(Path(sign_windows.__file__).resolve()), "%1"],
         }}
     config.write_text(json.dumps(settings))
     command = ["pnpm", "exec", "tauri", "bundle" if args.bundle_only else "build"]
