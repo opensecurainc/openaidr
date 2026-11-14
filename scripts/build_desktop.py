@@ -532,12 +532,15 @@ def package(args, work, settings, config, info):
     command.extend(["--config", config])
     if args.no_bundle:
         command.append("--no-bundle")
-    universal = None
+    environment = None
+    if sys.platform == "darwin":
+        # Tauri otherwise skips Finder's background, icon size, and positions in CI.
+        environment = {**os.environ, "TAURI_BUNDLER_DMG_IGNORE_CI": "true"}
     if args.macos_universal:
         # build.rs accepts the Intel slice only inside a universal build, and
         # both slices compile for the app's minimum macOS version.
-        universal = {**os.environ, "OPENAIDR_MACOS_UNIVERSAL": "1",
-                     "MACOSX_DEPLOYMENT_TARGET": ".".join(map(str, macos_universal.MINIMUM_MACOS))}
+        environment = {**environment, "OPENAIDR_MACOS_UNIVERSAL": "1",
+                       "MACOSX_DEPLOYMENT_TARGET": ".".join(map(str, macos_universal.MINIMUM_MACOS))}
     if sys.platform == "darwin" and args.release and args.signing_mode != "ad-hoc":
         # Tauri 2.12 ignores stapler's exit status. Attach and validate the
         # ticket during its stapling call, before it creates the DMG/archive.
@@ -549,10 +552,9 @@ def package(args, work, settings, config, info):
                 ]) + ' "$@"\n'
             )
             shim.chmod(0o700)
-            environment = universal or os.environ
             run(command, DESKTOP, env={**environment, "PATH": directory + os.pathsep + environment["PATH"]})
-    elif universal:
-        run(command, DESKTOP, env=universal)
+    elif environment:
+        run(command, DESKTOP, env=environment)
     elif sys.platform == "linux":
         # AppImage build tools must also work in CI and containers without FUSE.
         run(command, DESKTOP, env={**os.environ, "APPIMAGE_EXTRACT_AND_RUN": "1"})

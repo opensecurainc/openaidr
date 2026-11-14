@@ -6,6 +6,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -74,6 +75,35 @@ def test_signing_mode_rejects_invalid_builds(builder, tmp_path, monkeypatch, cap
     assert error.value.code == 2
     assert message in capsys.readouterr().err
     assert not (tmp_path / "build").exists()
+
+
+@pytest.mark.parametrize(("universal", "release", "signing_mode"), [
+    (False, False, None),
+    (False, False, "ad-hoc"),
+    (False, True, "developer-id"),
+    (True, False, None),
+    (True, True, "developer-id"),
+])
+def test_ci_macos_bundles_keep_finder_installation_layout(
+    builder, tmp_path, monkeypatch, universal, release, signing_mode,
+):
+    monkeypatch.setattr(builder.sys, "platform", "darwin")
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("TAURI_BUNDLER_DMG_IGNORE_CI", "false")
+    calls = []
+    monkeypatch.setattr(builder, "run", lambda args, cwd=None, env=None: calls.append((args, env)))
+    args = SimpleNamespace(
+        bundle_only=False, windows_sign=False, simulation=False, e2e_ui=False,
+        macos_universal=universal, no_bundle=False, release=release, signing_mode=signing_mode,
+    )
+    builder.package(args, tmp_path, {"bundle": {}}, tmp_path / "build.conf.json", {})
+    command, environment = calls[-1]
+    assert command[:4] == ["pnpm", "exec", "tauri", "build"]
+    assert environment["CI"] == "true"
+    assert environment["TAURI_BUNDLER_DMG_IGNORE_CI"] == "true"
+    if universal:
+        assert environment["OPENAIDR_MACOS_UNIVERSAL"] == "1"
+        assert environment["MACOSX_DEPLOYMENT_TARGET"] == "12.0"
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="Needs native macOS codesign and disk images")
