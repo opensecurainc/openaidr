@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -166,6 +167,20 @@ def test_multiple_credentials_and_json_assignments_preserve_structure():
         "password": "[REDACTED:assignment]",
         "note": "[REDACTED:npm-access-token]",
     }
+
+
+def test_redact_value_redacts_credentials_in_dict_keys():
+    first = "AKIAIOSFODNN7EXAMPLE"
+    second = "AKIAIOSFODNN7EXAMPLF"
+    marker = "[REDACTED:aws-access-key]"
+    value = {first: "first", second: "second"}
+    assert shared_redact.redact_value(value) == {
+        f"{marker}#{hashlib.sha256(first.encode()).hexdigest()[:8]}": "first",
+        f"{marker}#{hashlib.sha256(second.encode()).hexdigest()[:8]}": "second",
+    }
+    for key in (1, None):
+        with pytest.raises(TypeError):
+            shared_redact.redact_value({key: "value"})
 
 
 def test_overlapping_rules_remove_the_union_without_scanning_markers(tmp_path):
