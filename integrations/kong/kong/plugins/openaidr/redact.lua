@@ -2,6 +2,12 @@ local rules = require "kong.plugins.openaidr.rules"
 local json = require("cjson.safe").new()
 json.decode_max_depth(32)
 
+-- PCRE2 matches \s, \b and \w against ASCII only unless UCP is on, while the Python
+-- redactor's str patterns are Unicode-aware. Match the shared rules the same way.
+for _, rule in ipairs(rules.patterns) do
+  rule.pattern = "(*UTF)(*UCP)" .. rule.pattern
+end
+
 local M = {}
 local JSON_STRING = [["(?:[^"\\]|\\.)*"]]
 
