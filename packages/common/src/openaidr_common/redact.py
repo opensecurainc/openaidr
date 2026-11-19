@@ -92,6 +92,9 @@ class SecretRedactor:
 
 _REDACTOR = SecretRedactor(Path(__file__).with_name("secret-redaction.yaml"))
 
+# Nesting beyond this is treated as a credential rather than recursed into.
+MAX_DEPTH = 100
+
 
 def redact_string(text):
     return _REDACTOR.redact(text)
@@ -101,9 +104,11 @@ def is_secret_key(key):
     return _REDACTOR.is_secret_key(key)
 
 
-def contains_secret(value):
+def contains_secret(value, _depth=0):
+    if _depth > MAX_DEPTH:
+        return True
     if isinstance(value, list):
-        return any(contains_secret(item) for item in value)
+        return any(contains_secret(item, _depth + 1) for item in value)
     if not isinstance(value, str):
         return False
     if redact_string(value)[1]:
@@ -122,25 +127,32 @@ def contains_secret(value):
         decoded = json.loads(value, object_pairs_hook=object_values)
     except ValueError:
         return False
-    return secret_key or contains_secret(decoded)
+    except RecursionError:
+        return True
+    return secret_key or contains_secret(decoded, _depth + 1)
 
 
 
 
-def redact_value(value):
+def redact_value(value, _depth=0):
     """Apply the shared sensor credential rules to nested backend evidence."""
+    if _depth > MAX_DEPTH:
+        return "[REDACTED:depth-limit]"
     if isinstance(value, dict):
         return {
-            key: "[REDACTED]" if is_secret_key(key) else redact_value(item)
+            key: "[REDACTED]" if is_secret_key(key) else redact_value(item, _depth + 1)
             for key, item in value.items()
         }
     if isinstance(value, list):
-        return [redact_value(item) for item in value]
+        return [redact_value(item, _depth + 1) for item in value]
     if isinstance(value, str):
         if value.lstrip().startswith(("{", "[")):
             try:
-                return json.dumps(redact_value(json.loads(value)), ensure_ascii=False)
+                decoded = json.loads(value)
+                return json.dumps(redact_value(decoded, _depth + 1), ensure_ascii=False)
             except ValueError:
                 pass
+            except RecursionError:
+                return "[REDACTED:depth-limit]"
         return redact_string(value)[0]
     return value

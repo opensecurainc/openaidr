@@ -168,6 +168,18 @@ def test_multiple_credentials_and_json_assignments_preserve_structure():
     }
 
 
+def test_deeply_nested_values_fail_closed_instead_of_raising_recursion_error():
+    deep = "[" * 1000 + "]" * 1000
+    live = json.loads(deep)
+    assert shared_redact.contains_secret(live) is True
+    assert shared_redact.contains_secret(deep) is True
+    assert "[REDACTED:depth-limit]" in json.dumps(shared_redact.redact_value(live))
+    assert "[REDACTED:depth-limit]" in shared_redact.redact_value(deep)
+    ordinary = "[" * 50 + "]" * 50
+    assert shared_redact.contains_secret(ordinary) is False
+    assert shared_redact.redact_value(ordinary) == ordinary
+
+
 def test_overlapping_rules_remove_the_union_without_scanning_markers(tmp_path):
     redactor = redactor_from_rules(
         tmp_path,
