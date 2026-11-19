@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -101,6 +102,16 @@ def is_secret_key(key):
     return _REDACTOR.is_secret_key(key)
 
 
+def redact_key(key):
+    if not isinstance(key, str):
+        return key
+    redacted = redact_string(key)[0]
+    if redacted == key:
+        return key
+    digest = hashlib.sha256(key.encode()).hexdigest()[:8]
+    return f"{redacted}#{digest}"
+
+
 def contains_secret(value):
     if isinstance(value, list):
         return any(contains_secret(item) for item in value)
@@ -131,7 +142,9 @@ def redact_value(value):
     """Apply the shared sensor credential rules to nested backend evidence."""
     if isinstance(value, dict):
         return {
-            key: "[REDACTED]" if is_secret_key(key) else redact_value(item)
+            redact_key(key): "[REDACTED]"
+            if is_secret_key(key)
+            else redact_value(item)
             for key, item in value.items()
         }
     if isinstance(value, list):
