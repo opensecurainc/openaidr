@@ -436,6 +436,7 @@ def suite(kong, state):
     secrets = ("ghp_" + "a" * 36, "oagt_" + "b" * 43)
     escaped = "".join("\\u%04x" % ord(character) for character in secrets[1])
     sensitive = ["hello " + secret for secret in secrets] + [
+        "bearer\u00a0" + "a" * 32, "bearer\u2028" + "a" * 32,
         '{"token":"p?4"}', r'{"\u0074oken":"private-value"}',
         '{"value":"' + escaped + '"}', '"' + escaped + '"',
         '["' + escaped + '"]', '{"' + escaped + '":"public"}',
