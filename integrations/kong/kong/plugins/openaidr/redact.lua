@@ -2,10 +2,12 @@ local rules = require "kong.plugins.openaidr.rules"
 local json = require("cjson.safe").new()
 json.decode_max_depth(32)
 
--- PCRE2 matches \s, \b and \w against ASCII only unless UCP is on, while the Python
--- redactor's str patterns are Unicode-aware. Match the shared rules the same way.
+-- PCRE2 \s is ASCII-only without UCP, so Unicode separators miss credentials.
+-- UCP also widens \b and would drop tokens beside non-ASCII text. Keep ASCII
+-- word boundaries, then enable UTF/UCP so \s matches Unicode whitespace.
+local ASCII_WORD_BOUNDARY = "(?:(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])|(?<=[A-Za-z0-9_])(?![A-Za-z0-9_]))"
 for _, rule in ipairs(rules.patterns) do
-  rule.pattern = "(*UTF)(*UCP)" .. rule.pattern
+  rule.pattern = "(*UTF)(*UCP)" .. rule.pattern:gsub("\\b", ASCII_WORD_BOUNDARY)
 end
 
 local M = {}
@@ -89,7 +91,9 @@ local function inspect_json(text, depth, budget)
     local following = finish + 1
     while text:sub(following, following):match("%s") do following = following + 1 end
     if text:sub(following, following) == ":" then
-      local match, _, key_err = ngx.re.find(value, rules.secret_key_pattern, "ijo")
+      -- Prefix at the call site so tests can still swap rules.secret_key_pattern.
+      local match, _, key_err = ngx.re.find(
+        value, "(*UTF)(*UCP)" .. rules.secret_key_pattern, "ijo")
       if key_err then return nil end
       if match then return true end
     end
