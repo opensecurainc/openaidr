@@ -24,9 +24,9 @@ Run the Rust contract tests from the repository root:
 cargo test --locked --manifest-path packages/windows-hook/Cargo.toml
 ```
 
-The contract tests also run on macOS and Linux. Native transport and shell tests
-require Windows and run in the
-[Windows desktop workflow](../../.github/workflows/desktop-windows.yml).
+The contract tests also run on macOS and Linux. Run the
+[native transport and shell tests](../../tests/test_hook_runtime_windows.py)
+on Windows.
 Use the [desktop build](../../apps/desktop/README.md) for a packaged executable
 with the required version metadata. See the
 hook architecture
