@@ -279,6 +279,26 @@ for _, secret in ipairs({"ghp_" .. string.rep("a", 36), "oagt_" .. string.rep("b
   local result, changed = redact.text("hello " .. secret .. " world")
   assert(changed and not result:find(secret, 1, true), "credential was not redacted")
 end
+-- Unicode separators must redact; ASCII \b must still catch tokens after non-ASCII.
+local nbsp = "bearer\xc2\xa0" .. string.rep("a", 32)
+local result, changed = redact.text(nbsp)
+assert(changed and result:find("REDACTED:bearer", 1, true), "NBSP bearer must redact")
+-- Python str \s includes U+001C–U+001F; PCRE2 UCP \s does not unless expanded.
+local unit_sep = "bearer\x1f" .. string.rep("a", 32)
+result, changed = redact.text(unit_sep)
+assert(changed and result:find("REDACTED:bearer", 1, true), "U+001F bearer must redact")
+local eacute_token = "\xc3\xa9ghp_" .. string.rep("a", 36)
+result, changed = redact.text(eacute_token)
+assert(changed and not result:find("ghp_", 1, true), "ASCII word-boundary token coverage")
+-- Unicode-folded secret key (U+017F → s under UCP case fold).
+result, changed = redact.text('{"\xc5\xbfecret":"hunter2"}')
+assert(changed and result == "[REDACTED:json]", "Unicode-folded secret key must redact")
+-- (*UTF) errors on invalid UTF-8 once a rule runs. No keyword → unchanged;
+-- a credential keyword forces a match and fails closed.
+result, changed = redact.text("hello \xff world")
+assert(result == "hello \xff world" and changed == false, "malformed UTF-8 without keywords")
+result, changed = redact.text("ghp_" .. string.rep("a", 36) .. "\xff")
+assert(result == nil, "malformed UTF-8 with a credential keyword fails closed")
 local key_pattern = rules.secret_key_pattern
 rules.secret_key_pattern = "["
 assert(redact.text('{"public":"value"}') == nil, "key inspection errors must omit content")
@@ -436,6 +456,10 @@ def suite(kong, state):
     secrets = ("ghp_" + "a" * 36, "oagt_" + "b" * 43)
     escaped = "".join("\\u%04x" % ord(character) for character in secrets[1])
     sensitive = ["hello " + secret for secret in secrets] + [
+        "bearer\u00a0" + "a" * 32, "bearer\u2028" + "a" * 32,
+        "bearer\u001f" + "a" * 32, "bearer\u001c" + "a" * 32,
+        "\u00e9ghp_" + "a" * 36,
+        '{"\u017fecret":"hunter2"}',
         '{"token":"p?4"}', r'{"\u0074oken":"private-value"}',
         '{"value":"' + escaped + '"}', '"' + escaped + '"',
         '["' + escaped + '"]', '{"' + escaped + '":"public"}',
