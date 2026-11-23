@@ -283,6 +283,10 @@ end
 local nbsp = "bearer\xc2\xa0" .. string.rep("a", 32)
 local result, changed = redact.text(nbsp)
 assert(changed and result:find("REDACTED:bearer", 1, true), "NBSP bearer must redact")
+-- Python str \s includes U+001C–U+001F; PCRE2 UCP \s does not unless expanded.
+local unit_sep = "bearer\x1f" .. string.rep("a", 32)
+result, changed = redact.text(unit_sep)
+assert(changed and result:find("REDACTED:bearer", 1, true), "U+001F bearer must redact")
 local eacute_token = "\xc3\xa9ghp_" .. string.rep("a", 36)
 result, changed = redact.text(eacute_token)
 assert(changed and not result:find("ghp_", 1, true), "ASCII word-boundary token coverage")
@@ -453,6 +457,7 @@ def suite(kong, state):
     escaped = "".join("\\u%04x" % ord(character) for character in secrets[1])
     sensitive = ["hello " + secret for secret in secrets] + [
         "bearer\u00a0" + "a" * 32, "bearer\u2028" + "a" * 32,
+        "bearer\u001f" + "a" * 32, "bearer\u001c" + "a" * 32,
         "\u00e9ghp_" + "a" * 36,
         '{"\u017fecret":"hunter2"}',
         '{"token":"p?4"}', r'{"\u0074oken":"private-value"}',

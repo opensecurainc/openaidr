@@ -5,9 +5,46 @@ json.decode_max_depth(32)
 -- PCRE2 \s is ASCII-only without UCP, so Unicode separators miss credentials.
 -- UCP also widens \b and would drop tokens beside non-ASCII text. Keep ASCII
 -- word boundaries, then enable UTF/UCP so \s matches Unicode whitespace.
+-- Python str \s also matches U+001C–U+001F (Cc, bidi S); PCRE2 UCP \s does not.
 local ASCII_WORD_BOUNDARY = "(?:(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])|(?<=[A-Za-z0-9_])(?![A-Za-z0-9_]))"
+local function expand_python_s(pattern)
+  local out, i, in_class = {}, 1, false
+  while i <= #pattern do
+    local c = pattern:sub(i, i)
+    if c == "\\" and i < #pattern then
+      local n = pattern:sub(i + 1, i + 1)
+      if n == "s" then
+        out[#out + 1] = in_class and "\\s\\x1c-\\x1f" or "[\\s\\x1c-\\x1f]"
+      else
+        out[#out + 1] = c .. n
+      end
+      i = i + 2
+    elseif c == "[" and not in_class then
+      in_class = true
+      out[#out + 1] = c
+      i = i + 1
+      if pattern:sub(i, i) == "^" then
+        out[#out + 1] = "^"
+        i = i + 1
+      end
+      if pattern:sub(i, i) == "]" then
+        out[#out + 1] = "]"
+        i = i + 1
+      end
+    elseif c == "]" and in_class then
+      in_class = false
+      out[#out + 1] = c
+      i = i + 1
+    else
+      out[#out + 1] = c
+      i = i + 1
+    end
+  end
+  return table.concat(out)
+end
 for _, rule in ipairs(rules.patterns) do
-  rule.pattern = "(*UTF)(*UCP)" .. rule.pattern:gsub("\\b", ASCII_WORD_BOUNDARY)
+  local rewritten = rule.pattern:gsub("\\b", ASCII_WORD_BOUNDARY)
+  rule.pattern = "(*UTF)(*UCP)" .. expand_python_s(rewritten)
 end
 
 local M = {}
