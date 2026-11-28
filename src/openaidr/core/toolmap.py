@@ -147,7 +147,12 @@ def map_tool(product, name, args=None, raw=""):
         "bash",
         "run_shell_command",
     ):
-        cmd = command_text(args) if product == "codex-cli" else first(args, "command")
+        if product == "codex-cli":
+            cmd = command_text(args)
+        elif product == "claude-code":
+            cmd = first(args, "command", "cmd")
+        else:
+            cmd = first(args, "command")
         if cmd:
             return [
                 {
