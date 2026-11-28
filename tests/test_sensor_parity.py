@@ -285,6 +285,12 @@ def test_codex_hook_tool_names_map_like_their_transcript_names():
     ]
 
 
+def test_claude_bash_accepts_command_alias():
+    [action] = map_tool("claude-code", "Bash", {"cmd": "pwd"})
+    assert action["kind"] == "command"
+    assert action["command"]["text"] == "pwd"
+
+
 def test_tool_mapping_argument_precedence():
     assert (
         map_tool("codex-cli", "read_file", {"path": "/first", "file_path": "/second"})[
